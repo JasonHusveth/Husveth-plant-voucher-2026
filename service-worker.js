@@ -2,7 +2,7 @@
 // Caches all app files for full offline use
 // Update CACHE_VERSION whenever you push a new version of the app
 
-const CACHE_VERSION = 'voucher-v1';
+const CACHE_VERSION = 'voucher-v2';
 const CACHE_NAME = CACHE_VERSION;
 
 // All files to cache on install
@@ -11,7 +11,9 @@ const FILES_TO_CACHE = [
   './index.html',
   './herbarium_voucher_app_v2.html',
   './herbarium_label_generator.html',
-  './manifest.json'
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png'
 ];
 
 // ── Install: cache all app files ──────────────────────────────
