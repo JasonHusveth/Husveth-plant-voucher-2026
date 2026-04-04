@@ -2,7 +2,7 @@
 // Caches all app files for full offline use
 // Update CACHE_VERSION whenever you push a new version of the app
 
-const CACHE_VERSION = 'voucher-v2';
+const CACHE_VERSION = 'voucher-v3';
 const CACHE_NAME = CACHE_VERSION;
 
 // All files to cache on install
