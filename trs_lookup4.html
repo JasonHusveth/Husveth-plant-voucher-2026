@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PLSS TRS Lookup</title>
+<style>
+@import url("https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Source+Code+Pro:wght@400;600&display=swap");
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--cr:#f5f0e8;--cr2:#ede7d9;--tn:#c8b89a;--br:#6b4f2e;--dk:#2e2012;
+  --gn:#3a5c2e;--gl:#d4e6ce;--am:#b07d2a;--al:#fdf3d8;--rd:#8b2020;--rl:#f8e0e0;
+  --bll:#dceaf7;--bl:#1a3a5c}
+body{background:var(--cr);color:var(--dk);font-family:Georgia,"Times New Roman",serif;
+  min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:2rem 1rem 4rem}
+.card{background:#fff;border:1px solid var(--tn);border-radius:4px;
+  box-shadow:0 2px 16px rgba(46,32,18,.12);width:100%;max-width:600px;overflow:hidden}
+.hdr{background:var(--br);color:var(--cr);padding:1.2rem 1.5rem 1.1rem}
+.hdr h1{font-family:"IM Fell English",Georgia,serif;font-size:1.3rem;font-weight:normal}
+.hdr p{font-size:.76rem;color:var(--tn);margin-top:.25rem;font-style:italic}
+.body{padding:1.5rem}
+.row{display:flex;gap:.75rem;margin-bottom:1rem}
+.f{display:flex;flex-direction:column;gap:.3rem;flex:1}
+label{font-size:.7rem;text-transform:uppercase;letter-spacing:.09em;color:var(--br)}
+input[type="text"]{width:100%;padding:.55rem .65rem;border:1px solid var(--tn);border-radius:3px;
+  background:var(--cr);color:var(--dk);font-family:"Source Code Pro",monospace;font-size:.92rem;
+  transition:border-color .15s,box-shadow .15s}
+input:focus{outline:none;border-color:var(--br);box-shadow:0 0 0 2px rgba(107,79,46,.13)}
+.btn{width:100%;padding:.7rem 1rem;background:var(--br);color:var(--cr);border:none;
+  border-radius:3px;font-family:"IM Fell English",Georgia,serif;font-size:1.05rem;
+  cursor:pointer;transition:background .15s;margin-bottom:1.25rem}
+.btn:hover:not(:disabled){background:var(--dk)}
+.btn:disabled{background:var(--tn);cursor:not-allowed}
+.box{border-radius:3px;padding:.9rem 1.1rem;display:none;animation:fi .22s ease}
+@keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.box.show{display:block}
+.box.loading{background:var(--bll);border:1px solid #7aaad4}
+.box.success{background:var(--gl);border:1px solid #7aad6b}
+.box.warning{background:var(--al);border:1px solid #c9993a}
+.box.error{background:var(--rl);border:1px solid #c97a7a}
+.box.cached{background:#f0ece4;border:1px solid var(--tn)}
+.blbl{font-size:.67rem;text-transform:uppercase;letter-spacing:.11em;font-weight:bold;margin-bottom:.5rem}
+.loading .blbl{color:var(--bl)}.success .blbl{color:var(--gn)}
+.warning .blbl,.cached .blbl{color:var(--am)}.error .blbl{color:var(--rd)}
+.trs{font-family:"Source Code Pro",monospace;font-size:1.15rem;font-weight:600;
+  color:var(--dk);margin-bottom:.55rem}
+.meta{display:flex;flex-wrap:wrap;gap:.25rem 1.1rem;font-size:.78rem;margin-top:.4rem}
+.meta span{color:var(--br);font-style:italic}
+.note{margin-top:.65rem;font-size:.78rem;font-style:italic;color:#5a3a18;
+  border-top:1px solid rgba(107,79,46,.18);padding-top:.55rem;line-height:1.5}
+.badges{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.6rem}
+.badge{font-size:.63rem;background:rgba(107,79,46,.1);color:var(--br);
+  padding:.15rem .45rem;border-radius:2px;font-family:"Source Code Pro",monospace}
+.badge.green{background:rgba(58,92,46,.1);color:var(--gn)}
+.tm{font-size:.68rem;color:var(--br);font-family:"Source Code Pro",monospace;margin-top:.35rem}
+.prog{height:4px;background:rgba(107,79,46,.15);border-radius:2px;margin-top:.5rem;overflow:hidden}
+.progb{height:100%;background:var(--br);width:0%;transition:width .4s}
+.cache-info{font-size:.72rem;color:var(--br);margin-bottom:.75rem;background:var(--cr2);
+  border:1px solid var(--tn);border-radius:3px;padding:.5rem .75rem;
+  display:flex;justify-content:space-between;align-items:center}
+.cache-clear{background:none;border:none;color:var(--rd);font-size:.7rem;
+  cursor:pointer;font-family:Georgia,serif;text-decoration:underline;padding:0}
+.div{border:none;border-top:1px solid var(--cr2);margin:1.3rem 0}
+.exh{font-size:.7rem;text-transform:uppercase;letter-spacing:.09em;color:var(--br);margin-bottom:.5rem}
+.ex{display:inline-block;margin:.2rem .3rem .2rem 0;padding:.28rem .65rem;
+  border:1px solid var(--tn);border-radius:2px;background:var(--cr);color:var(--br);
+  font-size:.74rem;font-family:"Source Code Pro",monospace;cursor:pointer;transition:background .12s}
+.ex:hover{background:var(--cr2);border-color:var(--br)}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="hdr">
+    <h1>PLSS TRS Lookup</h1>
+    <p>MnGeo API (MN) &nbsp;&middot;&nbsp; BLM CadNSDI (WI &amp; IA) &nbsp;&middot;&nbsp; Results cached locally after first lookup</p>
+  </div>
+  <div class="body">
+    <div class="cache-info">
+      <span id="cacheCount">Cache: checking&#8230;</span>
+      <button class="cache-clear" onclick="clearCache()">Clear cache</button>
+    </div>
+    <div class="row">
+      <div class="f"><label>Latitude</label>
+        <input type="text" id="lat" placeholder="e.g. 47.0654" inputmode="decimal"></div>
+      <div class="f"><label>Longitude</label>
+        <input type="text" id="lon" placeholder="e.g. -93.4218" inputmode="decimal"></div>
+    </div>
+    <button class="btn" id="btn" onclick="go()">Look Up TRS</button>
+    <div class="box" id="statusBox">
+      <div class="blbl" id="statusLabel"></div>
+      <div id="statusMsg"></div>
+      <div class="prog" id="progWrap" style="display:none">
+        <div class="progb" id="progBar"></div>
+      </div>
+    </div>
+    <div class="box" id="resultBox">
+      <div class="blbl" id="resultLabel"></div>
+      <div class="trs" id="trsStr"></div>
+      <div class="meta" id="metaRow"></div>
+      <div class="note" id="noteStr" style="display:none"></div>
+      <div class="badges" id="badges"></div>
+      <div class="tm" id="timing"></div>
+    </div>
+    <hr class="div">
+    <div class="exh">Test coordinates</div>
+    <button class="ex" onclick="ld(44.9634,-93.2355)">MN&middot;Ramsey</button>
+    <button class="ex" onclick="ld(47.0654,-93.4218)">MN&middot;Itasca</button>
+    <button class="ex" onclick="ld(46.8731,-95.9142)">MN&middot;Becker</button>
+    <button class="ex" onclick="ld(44.0458,-91.6401)">MN&middot;Winona</button>
+    <button class="ex" onclick="ld(47.9341,-91.7612)">MN&middot;lake</button>
+    <button class="ex" onclick="ld(45.9172,-90.8853)">WI&middot;Ashland</button>
+    <button class="ex" onclick="ld(45.4281,-91.8872)">WI&middot;Chippewa</button>
+    <button class="ex" onclick="ld(43.2975,-92.3527)">IA&middot;Mitchell</button>
+    <button class="ex" onclick="ld(43.0821,-91.4212)">IA&middot;Clayton</button>
+    <button class="ex" onclick="ld(42.9634,-93.6091)">IA&middot;Hancock</button>
+  </div>
+</div>
+<script>
+// ── Cache ─────────────────────────────────────────────────────────────────────
+const CP="trs_v3_";
+function ck(lat,lon){return CP+lat.toFixed(4)+"_"+lon.toFixed(4);}
+function cGet(lat,lon){try{const v=localStorage.getItem(ck(lat,lon));return v?JSON.parse(v):null;}catch(e){return null;}}
+function cSet(lat,lon,r){
+  try{
+    const keys=Object.keys(localStorage).filter(k=>k.startsWith(CP));
+    if(keys.length>=2000) localStorage.removeItem(keys[0]);
+    localStorage.setItem(ck(lat,lon),JSON.stringify(r));
+  }catch(e){}
+}
+function cCount(){try{return Object.keys(localStorage).filter(k=>k.startsWith(CP)).length;}catch(e){return 0;}}
+function clearCache(){
+  try{Object.keys(localStorage).filter(k=>k.startsWith(CP)).forEach(k=>localStorage.removeItem(k));updCache();}catch(e){}
+}
+function updCache(){
+  const n=cCount();
+  document.getElementById("cacheCount").textContent=
+    n===0?"Cache: empty \u2014 lookups saved here for offline use":
+          "Cache: "+n+" location"+(n===1?"":"s")+" stored";
+}
+
+// ── State detection ───────────────────────────────────────────────────────────
+function detState(lat,lon){
+  if(lat>=43.4&&lat<=49.4&&lon>=-97.3&&lon<=-89.4) return "MN";
+  if(lat>=43.0&&lat<=47.1&&lon>=-92.9&&lon<=-86.7) return "WI";
+  if(lat>=40.3&&lat<=43.5&&lon>=-96.7&&lon<=-90.1) return "IA";
+  return null;
+}
+
+// ── Fetch with timeout ────────────────────────────────────────────────────────
+function fT(url,ms){
+  const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);
+  return fetch(url,{signal:c.signal}).finally(()=>clearTimeout(t));
+}
+
+// ── MnGeo PLS API (MN) ────────────────────────────────────────────────────────
+// A=NE, B=NW, C=SW, D=SE — outermost first, so last char = QQ, second-to-last = Q
+const QMAP={A:"NE",B:"NW",C:"SW",D:"SE","1":"NE","2":"NW","3":"SW","4":"SE"};
+function parseQ(q){
+  if(!q) return "";
+  const c=q.toUpperCase().split("");
+  if(c.length===1) return (QMAP[c[0]]||c[0])+"\u00bc";
+  const Q  = QMAP[c[c.length-2]] || c[c.length-2];
+  const QQ = QMAP[c[c.length-1]] || c[c.length-1];
+  return QQ+"\u00bc"+Q+"\u00bc";
+}
+
+async function lookupMN(lat,lon){
+  const url="https://imageserver.gisdata.mn.gov/cgi-bin/pls?latitude="+lat+"&longitude="+lon;
+  const r=await fT(url,8000);
+  if(!r.ok) throw new Error("MnGeo HTTP "+r.status);
+  const txt=await r.text();
+  const g=tag=>{const m=txt.match(new RegExp("<"+tag+">([^<]*)</"+tag+">")); return m?m[1].trim():"";};
+
+  const err=g("e");
+  if(err) throw new Error("MnGeo: "+err);
+
+  const twp=g("township"), rng=g("range"), sec=g("section");
+  const qts=g("quarters"),  county=g("county"), town=g("townname");
+  if(!twp||!rng) throw new Error("MnGeo returned no TRS data");
+
+  const qqStr=parseQ(qts);
+  let trs="T."+twp+"N R."+rng+"W";
+  if(sec)   trs+=" Sec."+parseInt(sec);
+  if(qqStr) trs+=" "+qqStr;
+
+  let caseType="normal", note="";
+  if(!sec){
+    caseType="nosubdiv";
+    note="Section not determined \u2014 point may be on a boundary or water body.";
+  } else if(!qqStr){
+    caseType="nosubdiv";
+    note="Section located but no quarter data returned. Point may be at a section edge or water area.";
+  }
+
+  // Split QQ string for meta display: "SW\u00bcNW\u00bc" → QQ="SW\u00bc", Q="NW\u00bc"
+  let qDisp="\u2014", qqDisp="\u2014";
+  if(qqStr){
+    const mid=qqStr.indexOf("\u00bc");
+    if(mid!==-1 && mid<qqStr.length-1){
+      qqDisp=qqStr.slice(0,mid+1);   // e.g. "SW¼"
+      qDisp =qqStr.slice(mid+1);     // e.g. "NW¼"
+    } else {
+      qDisp=qqStr;
+    }
+  }
+
+  return {
+    trs, caseType, note, source:"MnGeo PLS API",
+    meta:[
+      ["Township", twp+"N"], ["Range", rng+"W"],
+      ["Section",  sec?parseInt(sec):"\u2014"],
+      ["Q\u00a0Section",  qDisp],
+      ["QQ\u00a0Section", qqDisp],
+      ["County",   county||"\u2014"],
+      ["Civil\u00a0Twp", town||"unnamed"]
+    ]
+  };
+}
+
+// ── BLM CadNSDI Layer 3 (WI / IA) ────────────────────────────────────────────
+async function lookupBLM(lat,lon){
+  const BASE="https://gis.blm.gov/arcgis/rest/services/Cadastral/BLM_Natl_PLSS_CadNSDI/MapServer/3/query";
+  const params=new URLSearchParams({
+    geometry:lon+","+lat, geometryType:"esriGeometryPoint", inSR:"4326",
+    spatialRel:"esriSpatialRelIntersects",
+    outFields:"TWNSHPNO,TWNSHPDIR,RANGENO,RANGEDIR,FRSTDIVNO,FRSTDIVTYP,QSEC,QQSEC,GOVLOT,PRINMER,STATEABBR,SURVTYP",
+    returnGeometry:"false", f:"json"
+  });
+  const r=await fT(BASE+"?"+params,12000);
+  if(!r.ok) throw new Error("BLM HTTP "+r.status);
+  const d=await r.json();
+  if(!d.features||d.features.length===0) throw new Error("No BLM PLSS polygon at this point");
+
+  const f=d.features[0].attributes;
+  const twp =(f.TWNSHPNO||"").trim(), twpD=(f.TWNSHPDIR||"").trim();
+  const rng =(f.RANGENO  ||"").trim(), rngD=(f.RANGEDIR ||"").trim();
+  const sec =(f.FRSTDIVNO||"").trim(), ftyp=(f.FRSTDIVTYP||"").trim().toUpperCase();
+  const qsec=(f.QSEC ||"").trim(), qqsec=(f.QQSEC||"").trim();
+  const lot =(f.GOVLOT||"").trim(), surv=(f.SURVTYP||"").trim().toUpperCase();
+
+  const bt=(twp&&twpD?"T."+twp+twpD+" ":"")+(rng&&rngD?"R."+rng+rngD+" ":"")+(sec?"Sec."+parseInt(sec):"");
+
+  // Water / meander
+  if(ftyp==="ML"||ftyp==="MW"||surv==="MW")
+    return{trs:bt+" [Water \u2014 verify]", caseType:"water",
+      note:"Point falls on a mapped water body or meander line. No QQ applies. Confirm upland location.",
+      source:"BLM CadNSDI",
+      meta:[["State",f.STATEABBR||"\u2014"],["Meridian",f.PRINMER||"\u2014"],
+            ["Township",twp+twpD],["Range",rng+rngD],["Section",sec?parseInt(sec):"\u2014"],["Type","Water"]]};
+
+  // Government lot
+  if(lot&&lot.trim()&&lot.trim()!=="0")
+    return{trs:bt+" Lot "+parseInt(lot), caseType:"lot",
+      note:"Government lot \u2014 irregular parcel along water, state line, or survey edge. No QQ subdivision.",
+      source:"BLM CadNSDI",
+      meta:[["State",f.STATEABBR||"\u2014"],["Meridian",f.PRINMER||"\u2014"],
+            ["Township",twp+twpD],["Range",rng+rngD],["Section",sec?parseInt(sec):"\u2014"],["Govt\u00a0Lot",parseInt(lot)]]};
+
+  // Normal section + QQ
+  let qqStr="";
+  if(qqsec&&qsec) qqStr=qqsec+"\u00bc"+qsec+"\u00bc";
+  else if(qsec)   qqStr=qsec+"\u00bc";
+
+  let trs=bt+(qqStr?" "+qqStr:""), caseType="normal", note="";
+  if(!qqStr){
+    caseType="nosubdiv"; trs+=" [QQ: verify]";
+    note="Section found but no QQ returned. May be at a section boundary or partially surveyed area.";
+  }
+
+  return{trs, caseType, note, source:"BLM CadNSDI",
+    meta:[["State",f.STATEABBR||"\u2014"],["Meridian",f.PRINMER||"\u2014"],
+          ["Township",twp+twpD],["Range",rng+rngD],["Section",sec?parseInt(sec):"\u2014"],
+          ["Q\u00a0Section", qsec?qsec+"\u00bc":"\u2014"],
+          ["QQ\u00a0Section",qqsec?qqsec+"\u00bc":"\u2014"]]};
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function ld(lat,lon){
+  document.getElementById("lat").value=lat;
+  document.getElementById("lon").value=lon;
+  document.getElementById("statusBox").className="box";
+  document.getElementById("resultBox").className="box";
+}
+function showStatus(type,label,msg,prog){
+  const b=document.getElementById("statusBox");
+  b.className="box "+type+" show";
+  document.getElementById("statusLabel").textContent=label;
+  document.getElementById("statusMsg").textContent=msg;
+  document.getElementById("progWrap").style.display=prog?"":"none";
+  document.getElementById("progBar").style.width="0%";
+  document.getElementById("resultBox").className="box";
+}
+function ap(pct,delay){setTimeout(()=>{document.getElementById("progBar").style.width=pct+"%";},delay);}
+function showResult(type,label,trs,meta,note,badges,ms){
+  document.getElementById("statusBox").className="box";
+  const b=document.getElementById("resultBox");
+  b.className="box "+type+" show";
+  document.getElementById("resultLabel").textContent=label;
+  document.getElementById("trsStr").textContent=trs;
+  document.getElementById("metaRow").innerHTML=meta.map(([k,v])=>"<div><span>"+k+":</span> "+v+"</div>").join("");
+  const ne=document.getElementById("noteStr");
+  if(note){ne.textContent=note;ne.style.display="";}else ne.style.display="none";
+  document.getElementById("badges").innerHTML=badges.map(([t,c])=>'<span class="badge '+(c||"")+'">'+t+'</span>').join("");
+  document.getElementById("timing").textContent="Lookup: "+ms.toFixed(0)+" ms";
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+async function go(){
+  const latV=document.getElementById("lat").value.trim();
+  const lonV=document.getElementById("lon").value.trim();
+  if(!latV||!lonV){alert("Enter both latitude and longitude.");return;}
+  const lat=parseFloat(latV), lon=parseFloat(lonV);
+  if(isNaN(lat)||isNaN(lon)){alert("Coordinates must be decimal degrees.");return;}
+
+  const t0=performance.now();
+  const state=detState(lat,lon);
+  if(!state){
+    showResult("error","Outside coverage","[Outside MN / WI / IA]",
+      [["Lat",lat.toFixed(5)],["Lon",lon.toFixed(5)]],
+      "Covers Minnesota, Wisconsin, and Iowa.",
+      [["Outside coverage area"]],performance.now()-t0);
+    return;
+  }
+
+  // Cache hit
+  const cached=cGet(lat,lon);
+  if(cached){
+    const typeMap={normal:"cached",lot:"warning",water:"warning",nosubdiv:"warning"};
+    showResult(typeMap[cached.caseType]||"cached",
+      "TRS located \u2014 cached",
+      cached.trs, cached.meta, cached.note,
+      [[cached.source],["Offline ready","green"]],
+      performance.now()-t0);
+    return;
+  }
+
+  // Live fetch
+  const svc=state==="MN"?"MnGeo PLS API":"BLM CadNSDI";
+  showStatus("loading","Querying "+svc+"\u2026",
+    state==="MN"
+      ?"Minnesota state service \u2014 typically 1\u20133 seconds."
+      :"Federal BLM service \u2014 may take 5\u201315 seconds. Please wait.",
+    true);
+  if(state==="MN"){ap(40,500);ap(80,1500);}
+  else{ap(20,500);ap(50,3500);ap(75,7000);}
+
+  const btn=document.getElementById("btn");
+  btn.disabled=true;
+
+  try{
+    const result=state==="MN"?await lookupMN(lat,lon):await lookupBLM(lat,lon);
+    ap(100,0);
+
+    const typeMap={normal:"success",lot:"warning",water:"warning",nosubdiv:"warning",none:"error"};
+    const labelMap={normal:"TRS located",lot:"Government Lot",
+      water:"Water body / Meander",nosubdiv:"Section located \u2014 verify QQ",none:"No match"};
+
+    cSet(lat,lon,result);
+    updCache();
+
+    showResult(
+      typeMap[result.caseType]||"success",
+      labelMap[result.caseType]||"TRS located",
+      result.trs, result.meta, result.note,
+      [[result.source],["Saved to cache \u2014 offline ready","green"]],
+      performance.now()-t0
+    );
+
+  }catch(err){
+    const isTO=err.name==="AbortError"||err.message.toLowerCase().includes("abort");
+    showStatus("error",
+      isTO?"Service timeout":"Lookup failed",
+      isTO
+        ?"The "+svc+" did not respond in time. Check your signal and try again. Results are cached once successful."
+        :err.message+". Check your connection and try again.",
+      false);
+  }
+  btn.disabled=false;
+}
+
+document.addEventListener("keydown",e=>{if(e.key==="Enter")go();});
+window.addEventListener("load",updCache);
+</script>
+</body>
+</html>
