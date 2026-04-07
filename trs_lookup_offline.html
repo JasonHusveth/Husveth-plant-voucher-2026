@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRS Lookup — Offline</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Source+Code+Pro:wght@400;600&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --cream:#f5f0e8; --cream2:#ede7d9; --tan:#c8b89a; --brown:#6b4f2e;
+    --dark:#2e2012; --green:#3a5c2e; --green-lt:#d4e6ce;
+    --amber:#b07d2a; --amber-lt:#fdf3d8; --red:#8b2020; --red-lt:#f8e0e0;
+    --blue:#1a3a5c; --blue-lt:#dceaf7;
+  }
+  body { background:var(--cream); color:var(--dark); font-family:Georgia,'Times New Roman',serif;
+    min-height:100vh; display:flex; align-items:flex-start; justify-content:center; padding:2rem 1rem 4rem; }
+  .card { background:#fff; border:1px solid var(--tan); border-radius:4px;
+    box-shadow:0 2px 12px rgba(46,32,18,.10); width:100%; max-width:600px; overflow:hidden; }
+  .card-header { background:var(--brown); color:var(--cream); padding:1.1rem 1.5rem 1rem; }
+  .card-header h1 { font-family:'IM Fell English',Georgia,serif; font-size:1.25rem; font-weight:normal; }
+  .card-header p { font-size:.78rem; color:var(--tan); margin-top:.2rem; font-style:italic; }
+  .card-body { padding:1.5rem; }
+  .field-row { display:flex; gap:.75rem; margin-bottom:1rem; }
+  .field { display:flex; flex-direction:column; gap:.3rem; flex:1; }
+  label { font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; color:var(--brown); }
+  input[type="text"] { width:100%; padding:.5rem .6rem; border:1px solid var(--tan); border-radius:3px;
+    background:var(--cream); color:var(--dark); font-family:'Source Code Pro',monospace; font-size:.9rem; }
+  input:focus { outline:none; border-color:var(--brown); box-shadow:0 0 0 2px rgba(107,79,46,.12); }
+  .btn-lookup { width:100%; padding:.65rem 1rem; background:var(--brown); color:var(--cream);
+    border:none; border-radius:3px; font-family:'IM Fell English',Georgia,serif; font-size:1rem;
+    cursor:pointer; transition:background .15s; margin-bottom:1.25rem; }
+  .btn-lookup:hover:not(:disabled) { background:var(--dark); }
+  .btn-lookup:disabled { background:var(--tan); cursor:not-allowed; }
+  .init-msg { background:var(--blue-lt); border:1px solid #7aaad4; border-radius:3px;
+    padding:.8rem 1rem; font-size:.85rem; margin-bottom:1rem; display:none; }
+  .result-box { border-radius:3px; padding:1rem 1.1rem; display:none; animation:fadeIn .2s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(3px)} to{opacity:1;transform:translateY(0)} }
+  .result-box.success { background:var(--green-lt);border:1px solid #7aad6b;display:block; }
+  .result-box.warning { background:var(--amber-lt);border:1px solid #c9993a;display:block; }
+  .result-box.error   { background:var(--red-lt);border:1px solid #c97a7a;display:block; }
+  .result-label { font-size:.68rem; text-transform:uppercase; letter-spacing:.1em; font-weight:bold; margin-bottom:.45rem; }
+  .success .result-label { color:var(--green); }
+  .warning .result-label { color:var(--amber); }
+  .error   .result-label { color:var(--red); }
+  .trs-string { font-family:'Source Code Pro',monospace; font-size:1.1rem; font-weight:600; color:var(--dark); margin-bottom:.5rem; }
+  .meta-row { display:flex; flex-wrap:wrap; gap:.2rem 1rem; font-size:.78rem; margin-top:.4rem; }
+  .meta-row span { color:var(--brown); font-style:italic; }
+  .note { margin-top:.6rem; font-size:.78rem; font-style:italic; color:#5a4020;
+    border-top:1px solid rgba(107,79,46,.2); padding-top:.5rem; }
+  .source-badge { display:inline-block; font-size:.65rem; background:rgba(107,79,46,.12); color:var(--brown);
+    padding:.1rem .4rem; border-radius:2px; margin-top:.5rem; font-family:'Source Code Pro',monospace; }
+  .divider { border:none; border-top:1px solid var(--cream2); margin:1.25rem 0; }
+  .examples h3 { font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; color:var(--brown); margin-bottom:.5rem; }
+  .example-btn { display:inline-block; margin:.2rem .3rem .2rem 0; padding:.25rem .6rem;
+    border:1px solid var(--tan); border-radius:2px; background:var(--cream); color:var(--brown);
+    font-size:.75rem; font-family:'Source Code Pro',monospace; cursor:pointer; }
+  .example-btn:hover { background:var(--cream2); border-color:var(--brown); }
+  .timing { font-size:.7rem; color:var(--brown); font-family:'Source Code Pro',monospace; margin-top:.3rem; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="card-header">
+    <h1>PLSS TRS Lookup — Offline</h1>
+    <p>239,788 sections embedded · MN · WI · IA · No network required after load</p>
+  </div>
+  <div class="card-body">
+
+    <div class="init-msg" id="initMsg">
+      ⏳ Loading PLSS section data (~2.5 MB)…
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label>Latitude</label>
+        <input type="text" id="lat" placeholder="e.g. 47.0654" inputmode="decimal">
+      </div>
+      <div class="field">
+        <label>Longitude</label>
+        <input type="text" id="lon" placeholder="e.g. -93.4218" inputmode="decimal">
+      </div>
+    </div>
+
+    <button class="btn-lookup" id="lookupBtn" disabled onclick="doLookup()">
+      Loading data…
+    </button>
+
+    <div class="result-box" id="resultBox">
+      <div class="result-label" id="resultLabel"></div>
+      <div class="trs-string" id="trsString"></div>
+      <div class="meta-row" id="metaRow"></div>
+      <div class="note" id="resultNote" style="display:none"></div>
+      <div class="source-badge">Offline · Nearest-centroid + QQ math</div>
+      <div class="timing" id="timing"></div>
+    </div>
+
+    <hr class="divider">
+
+    <div class="examples">
+      <h3>Test coordinates</h3>
+      <button class="example-btn" onclick="load(47.0654,-93.4218)">MN · Itasca Co.</button>
+      <button class="example-btn" onclick="load(44.9634,-93.2355)">MN · Ramsey Co.</button>
+      <button class="example-btn" onclick="load(46.8731,-95.9142)">MN · Becker Co.</button>
+      <button class="example-btn" onclick="load(47.9341,-91.7612)">MN · lake shore</button>
+      <button class="example-btn" onclick="load(45.9172,-90.8853)">WI · Ashland Co.</button>
+      <button class="example-btn" onclick="load(43.0731,-89.4012)">WI · Dane Co.</button>
+      <button class="example-btn" onclick="load(45.4281,-91.8872)">WI · Chippewa Co.</button>
+      <button class="example-btn" onclick="load(42.4975,-92.3527)">IA · Grundy Co.</button>
+      <button class="example-btn" onclick="load(41.6005,-93.6091)">IA · Polk Co.</button>
+      <button class="example-btn" onclick="load(42.9634,-91.4212)">IA · Clayton Co.</button>
+    </div>
+
+  </div>
+</div>
+
+<script src="plss_data.js"></script>
+<script>
+// ── PLSS data decoder ────────────────────────────────────────────────────
+
+const STATES = ['MN','WI','IA'];
+let RECS = null;  // Float32Array view: [t, r, rdBit, s, stId, la, lo] per record
+
+function initData() {
+  const msg = document.getElementById('initMsg');
+  msg.style.display = 'block';
+  const t0 = performance.now();
+
+  // Decode base64 → binary
+  const raw = atob(PLSS_B64);
+  const n = raw.length / 8;
+  // Store as flat typed arrays for fast search
+  const tArr  = new Uint8Array(n);
+  const rArr  = new Uint8Array(n);
+  const sArr  = new Uint8Array(n);
+  const stArr = new Uint8Array(n);   // 0=MN,1=WI,2=IA
+  const rdArr = new Uint8Array(n);   // 0=W, 1=E
+  const laArr = new Float32Array(n);
+  const loArr = new Float32Array(n);
+
+  for (let i = 0; i < n; i++) {
+    const base = i * 8;
+    tArr[i]  = raw.charCodeAt(base);
+    rArr[i]  = raw.charCodeAt(base+1);
+    sArr[i]  = raw.charCodeAt(base+2);
+    const flags = raw.charCodeAt(base+3);
+    stArr[i] = (flags >> 6) & 3;
+    rdArr[i] = flags & 1;
+    const latEnc = (raw.charCodeAt(base+4) << 8) | raw.charCodeAt(base+5);
+    const lonEnc = (raw.charCodeAt(base+6) << 8) | raw.charCodeAt(base+7);
+    laArr[i] = latEnc / 1000.0 + 40.0;
+    loArr[i] = lonEnc / 1000.0 - 98.0;
+  }
+
+  RECS = { tArr, rArr, sArr, stArr, rdArr, laArr, loArr, n };
+
+  const elapsed = (performance.now() - t0).toFixed(0);
+  msg.style.display = 'none';
+  const btn = document.getElementById('lookupBtn');
+  btn.disabled = false;
+  btn.textContent = 'Look Up TRS';
+  console.log(`PLSS data loaded: ${n} sections in ${elapsed}ms`);
+}
+
+// ── State detection ──────────────────────────────────────────────────────
+
+function detectState(lat, lon) {
+  if (lat >= 43.4 && lat <= 49.4 && lon >= -97.3 && lon <= -89.4) return 0; // MN
+  if (lat >= 42.4 && lat <= 47.1 && lon >= -92.9 && lon <= -86.7) return 1; // WI
+  if (lat >= 40.3 && lat <= 43.5 && lon >= -96.7 && lon <= -90.1) return 2; // IA
+  return -1;
+}
+
+// ── Nearest section centroid ─────────────────────────────────────────────
+// Uses lat² + (lon*cos(lat))² distance metric
+
+function findNearestSection(lat, lon, stateId) {
+  const { tArr, rArr, sArr, stArr, rdArr, laArr, loArr, n } = RECS;
+  const cosLat = Math.cos(lat * Math.PI / 180);
+  let bestIdx = -1, bestDist = Infinity;
+
+  for (let i = 0; i < n; i++) {
+    if (stArr[i] !== stateId) continue;
+    const dlat = laArr[i] - lat;
+    const dlon = (loArr[i] - lon) * cosLat;
+    const d = dlat*dlat + dlon*dlon;
+    if (d < bestDist) { bestDist = d; bestIdx = i; }
+  }
+  return bestIdx;
+}
+
+// ── QQ math ──────────────────────────────────────────────────────────────
+
+function computeQQ(ptLat, ptLon, cenLat, cenLon) {
+  // Quarter section (Q): which half N/S and E/W of section centroid
+  const qNS = ptLat >= cenLat ? 'N' : 'S';
+  const qEW = ptLon >= cenLon ? 'E' : 'W';
+
+  // Quarter-section centroid: 0.25 miles offset from section center
+  const degPerMileLat = 1.0 / 69.0;
+  const degPerMileLon = 1.0 / (69.0 * Math.cos(cenLat * Math.PI / 180));
+  const qCenLat = cenLat + 0.25 * degPerMileLat * (qNS === 'N' ? 1 : -1);
+  const qCenLon = cenLon + 0.25 * degPerMileLon * (qEW === 'E' ? 1 : -1);
+
+  // QQ: which half of the quarter section
+  const qqNS = ptLat >= qCenLat ? 'N' : 'S';
+  const qqEW = ptLon >= qCenLon ? 'E' : 'W';
+
+  return {
+    q:  qNS + qEW,   // e.g. 'NE'
+    qq: qqNS + qqEW  // e.g. 'SW'
+  };
+}
+
+// ── UI helpers ───────────────────────────────────────────────────────────
+
+function load(lat, lon) {
+  document.getElementById('lat').value = lat;
+  document.getElementById('lon').value = lon;
+  document.getElementById('resultBox').className = 'result-box';
+}
+
+function showResult(type, label, trs, meta, note, timeMs) {
+  const box = document.getElementById('resultBox');
+  box.className = 'result-box ' + type;
+  document.getElementById('resultLabel').textContent = label;
+  document.getElementById('trsString').textContent = trs;
+  document.getElementById('metaRow').innerHTML =
+    meta.map(([k,v]) => `<div><span>${k}:</span> ${v}</div>`).join('');
+  const ne = document.getElementById('resultNote');
+  if (note) { ne.textContent = note; ne.style.display = ''; }
+  else ne.style.display = 'none';
+  document.getElementById('timing').textContent = `Lookup: ${timeMs.toFixed(1)} ms`;
+}
+
+// ── Main lookup ───────────────────────────────────────────────────────────
+
+function doLookup() {
+  if (!RECS) { alert('Data still loading, please wait.'); return; }
+
+  const lat = parseFloat(document.getElementById('lat').value.trim());
+  const lon = parseFloat(document.getElementById('lon').value.trim());
+
+  if (isNaN(lat) || isNaN(lon)) { alert('Enter valid decimal coordinates.'); return; }
+
+  const t0 = performance.now();
+  const stateId = detectState(lat, lon);
+
+  if (stateId === -1) {
+    showResult('error', 'Outside coverage',
+      '[Outside MN / WI / IA bounds]',
+      [['Lat', lat], ['Lon', lon]],
+      'This tool covers Minnesota, Wisconsin, and Iowa only.',
+      performance.now() - t0);
+    return;
+  }
+
+  const idx = findNearestSection(lat, lon, stateId);
+  if (idx === -1) {
+    showResult('error', 'No section found',
+      '[No section found]', [], 'No matching PLSS section in dataset.', performance.now() - t0);
+    return;
+  }
+
+  const { tArr, rArr, sArr, rdArr, laArr, loArr } = RECS;
+  const t = tArr[idx], r = rArr[idx], s = sArr[idx];
+  const rd = rdArr[idx] ? 'E' : 'W';
+  const cenLat = laArr[idx], cenLon = loArr[idx];
+  const state = STATES[stateId];
+
+  const { q, qq } = computeQQ(lat, lon, cenLat, cenLon);
+  const trs = `T.${t}N R.${r}${rd} Sec.${s} ${qq}\u00BC${q}\u00BC`;
+
+  // Distance check — if > 1 mile warn (may be water/boundary)
+  const distMiles = Math.sqrt(
+    Math.pow((lat - cenLat) * 69, 2) +
+    Math.pow((lon - cenLon) * 69 * Math.cos(lat * Math.PI/180), 2)
+  );
+
+  let note = '';
+  let type = 'success';
+  if (distMiles > 0.85) {
+    type = 'warning';
+    note = `Nearest section centroid is ${distMiles.toFixed(2)} mi away — point may be near a water body, state border, or survey gap. Verify with plat map.`;
+  }
+
+  const meta = [
+    ['State', state],
+    ['Township', `${t}N`],
+    ['Range', `${r}${rd}`],
+    ['Section', s],
+    ['Q Section', q + '\u00BC'],
+    ['QQ Section', qq + '\u00BC'],
+    ['Sec. centroid', `${cenLat.toFixed(4)}, ${cenLon.toFixed(4)}`],
+    ['Dist. to cen.', `${distMiles.toFixed(3)} mi`],
+  ];
+
+  showResult(type, type === 'success' ? 'TRS located' : 'TRS located — verify', trs, meta, note, performance.now() - t0);
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Enter') doLookup(); });
+
+// Initialize after page load
+window.addEventListener('load', () => {
+  if (typeof PLSS_B64 === 'undefined') {
+    document.getElementById('initMsg').textContent =
+      '⚠ plss_data.js not found. Both files must be in the same folder.';
+    document.getElementById('initMsg').style.display = 'block';
+    document.getElementById('initMsg').style.background = '#f8e0e0';
+    document.getElementById('initMsg').style.borderColor = '#c97a7a';
+  } else {
+    setTimeout(initData, 50); // allow page to render first
+  }
+});
+</script>
+</body>
+</html>
