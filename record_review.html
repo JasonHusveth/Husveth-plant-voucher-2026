@@ -1048,9 +1048,10 @@ async function saveRecord() {
     // Send exactly like the field app — plain JSON body, no-cors, no custom Content-Type.
     // This avoids the CORS preflight that Apps Script rejects.
     await fetch(SHEETS_URL, {
-      method: "POST",
-      mode:   "no-cors",
-      body:   JSON.stringify({ action:"update", specimenNumber:specNum, fields })
+      method:  "POST",
+      mode:    "no-cors",
+      headers: {"Content-Type": "application/json"},
+      body:    JSON.stringify({ action:"update", specimenNumber:specNum, fields })
     });
     // no-cors gives opaque response — can't read status, but no exception = request was sent
     isModified = false;
