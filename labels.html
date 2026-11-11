@@ -380,6 +380,11 @@ function renderLabels(records) {
   if (!records || !records.length) { setStatus('No records returned.', true); return; }
   setStatus('Showing ' + records.length + ' label(s). Click Print Labels to print.');
 
+  // Always print in ascending Specimen Number order (001 first, highest last),
+  // regardless of the order the Apps Script returns them (it returns newest first).
+  records = [...records].sort((a, b) =>
+    String(a['Specimen Number'] || '').localeCompare(String(b['Specimen Number'] || ''), undefined, { numeric: true }));
+
   // Pad to multiple of 4
   const padded = [...records];
   while (padded.length % 4 !== 0) padded.push(null);
