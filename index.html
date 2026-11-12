@@ -841,8 +841,10 @@ function _parseQ(q) {
   if (!q) return null;
   const c = q.toUpperCase().split("");
   if (c.length < 2) return null;
-  // MnGeo returns quarters inner-first (e.g. "DA" = SE quarter of NE quarter)
-  // so c[1] = outer (qq1), c[0] = inner (qq2)
+  // MnGeo "quarters" string, e.g. "ADDC": letter 1 = quarter of the section (A = NE),
+  // letter 2 = quarter-quarter (D = SE); later letters are finer divisions and are ignored.
+  // The written QQ puts the quarter-quarter FIRST: "AD" -> SENE (SE quarter of the NE quarter).
+  // qq1 receives c[1] (quarter-quarter) and qq2 receives c[0] (quarter) via Q/QQ below.
   const Q  = _QMAP[c[1]] || null;  // outer quarter
   const QQ = _QMAP[c[0]] || null;  // inner quarter
   return (Q && QQ) ? { Q, QQ } : null;
@@ -921,8 +923,8 @@ async function trsFromGPS() {
       document.getElementById("rnum").value = blm.rng;
       document.getElementById("rdir").value = (blm.rngD.toUpperCase() === "E") ? "E" : "W";
       document.getElementById("snum").value = blm.sec || "";
-      document.getElementById("qq1").value  = blm.qsec  || "";
-      document.getElementById("qq2").value  = blm.qqsec || "";
+      document.getElementById("qq1").value  = blm.qqsec || "";
+      document.getElementById("qq2").value  = blm.qsec  || "";
       buildTRS();
     }
   } catch (err) {

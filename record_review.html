@@ -1215,7 +1215,7 @@ function openTRSMap() {
 
 // ── TRSQQ from GPS (MnGeo + BLM fallback) ────────────────────────────────────
 const _QMAP={"A":"NE","B":"NW","C":"SW","D":"SE","1":"NE","2":"NW","3":"SW","4":"SE"};
-function _parseQ(q){if(!q)return null;const c=q.toUpperCase().split("");if(c.length<2)return null;const Q=_QMAP[c[1]]||null;const QQ=_QMAP[c[0]]||null;return(Q&&QQ)?{Q,QQ}:null;}
+function _parseQ(q){if(!q)return null;const c=q.toUpperCase().split("");if(c.length<2)return null;const Q=_QMAP[c[0]]||null;const QQ=_QMAP[c[1]]||null;return(Q&&QQ)?{Q,QQ}:null;}
 function _fT(url,ms){const ctrl=new AbortController();const tid=setTimeout(()=>ctrl.abort(),ms);return fetch(url,{signal:ctrl.signal}).finally(()=>clearTimeout(tid));}
 
 async function _lookupMnGeo(lat,lon){
