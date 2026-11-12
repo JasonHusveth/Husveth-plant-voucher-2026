@@ -402,10 +402,13 @@ function renderLabels(records) {
     const toks = raw ? raw.split(/[\s,;]+/).filter(Boolean) : [];
     const types = [];
     toks.forEach(function (t) {
-      const m = t.match(/^(\d+)?\s*(p|f|primocane|floricane)s?$/i);
+      // PF (or FP, P+F, both) = one sheet carrying both primocane and floricane
+      const m = t.match(/^(\d+)?\s*(pf|fp|p\+f|f\+p|both|p|f|primocane|floricane)s?$/i);
       if (!m) return;
       const n = m[1] ? parseInt(m[1], 10) : 1;
-      const kind = m[2].toLowerCase().charAt(0) === 'p' ? 'Primocane' : 'Floricane';
+      const code = m[2].toLowerCase();
+      const kind = code.length > 1 && /^(pf|fp|p\+f|f\+p|both)$/.test(code) ? 'Primocane + Floricane'
+                 : code.charAt(0) === 'p' ? 'Primocane' : 'Floricane';
       for (let i = 0; i < n; i++) types.push(kind);
     });
     if (!types.length) { expanded.push(r); return; }
