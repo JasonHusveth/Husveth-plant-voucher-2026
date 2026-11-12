@@ -310,6 +310,10 @@ function buildLabel(r) {
   }
   // Duplicate column: any "yes"-like entry marks the label as a duplicate
   const isDup = /^(y|yes|true|x|1|dup|duplicate)$/i.test(String(r['Duplicate'] || '').trim());
+  // Photos Only column: any entry except no/false/0 marks a photos-only record
+  const photoVal = String(r['Photos Only'] || '').trim();
+  const isPhoto = photoVal !== '' && !/^(n|no|false|0)$/i.test(photoVal);
+  const flags = [isDup ? 'Duplicate' : '', isPhoto ? 'Photos Only' : ''].filter(Boolean).join(' &middot; ');
   const { prose, assoc } = buildNarrative(r);
   const bodyHtml = esc(prose) + (assoc ? ' ' + assocHtml(assoc) : '');
 
@@ -335,7 +339,7 @@ function buildLabel(r) {
   ${coordLine ? `<div class="label-coords">${coordLine}</div>` : ''}
   ${(trsLine || r._sheetType) ? `<div class="label-coords label-trsrow"><span>${esc(trsLine)}</span>${r._sheetType ? '<span class="label-sheetinfo">Sheet ' + r._sheetNum + ' of ' + r._sheetTotal + ': ' + esc(r._sheetType) + '</span>' : ''}</div>` : ''}
   <div class="label-footer">
-    <div class="label-collector label-collrow"><span>${collLine}</span>${isDup ? '<span>Duplicate</span>' : ''}</div>
+    <div class="label-collector label-collrow"><span>${collLine}</span>${flags ? '<span>' + flags + '</span>' : ''}</div>
     <div class="label-footer-line">
       <span>Critical Connections Ecological Services</span>
       <span>${esc(specnum)}</span>
