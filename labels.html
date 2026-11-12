@@ -30,6 +30,9 @@ button.primary{background:#1a1a1a;color:#fff;}
 
 /* Label sheet */
 .label-sheet{background:#fff;border:1px solid #ddd;border-radius:3px;padding:0.25in;margin-bottom:20px;}
+.label-sheettype{font-weight:bold;font-size:8.5pt;text-transform:uppercase;letter-spacing:.06em;}
+.label-trsrow{display:flex;justify-content:space-between;align-items:baseline;}
+.label-collrow{display:flex;justify-content:space-between;align-items:baseline;gap:8pt;}
 .label-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.5in;}
 
 /* Individual label — no border, matches example format */
@@ -305,6 +308,8 @@ function buildLabel(r) {
     console.log('=== RECORD DUMP ===');
     Object.keys(r).forEach(function(k){ console.log('  [' + k + '] =>', JSON.stringify(r[k])); });
   }
+  // Duplicate column: any "yes"-like entry marks the label as a duplicate
+  const isDup = /^(y|yes|true|x|1|dup|duplicate)$/i.test(String(r['Duplicate'] || '').trim());
   const { prose, assoc } = buildNarrative(r);
   const bodyHtml = esc(prose) + (assoc ? ' ' + assocHtml(assoc) : '');
 
@@ -328,9 +333,9 @@ function buildLabel(r) {
   <div class="label-name"><em>${esc(sp)}</em>${auth ? ' <span class="auth">' + esc(auth) + '</span>' : ''}</div>
   <div class="label-body">${bodyHtml}</div>
   ${coordLine ? `<div class="label-coords">${coordLine}</div>` : ''}
-  ${trsLine ? `<div class="label-coords">${esc(trsLine)}</div>` : ''}
+  ${(trsLine || r._sheetType) ? `<div class="label-coords label-trsrow"><span>${esc(trsLine)}</span>${r._sheetType ? '<span class="label-sheetinfo">Sheet ' + r._sheetNum + ' of ' + r._sheetTotal + ': ' + esc(r._sheetType) + '</span>' : ''}</div>` : ''}
   <div class="label-footer">
-    <div class="label-collector">${collLine}</div>
+    <div class="label-collector label-collrow"><span>${collLine}</span>${isDup ? '<span>Duplicate</span>' : ''}</div>
     <div class="label-footer-line">
       <span>Critical Connections Ecological Services</span>
       <span>${esc(specnum)}</span>
@@ -378,12 +383,32 @@ function formatDate(raw) {
 
 function renderLabels(records) {
   if (!records || !records.length) { setStatus('No records returned.', true); return; }
-  setStatus('Showing ' + records.length + ' label(s). Click Print Labels to print.');
+  
 
   // Always print in ascending Specimen Number order (001 first, highest last),
   // regardless of the order the Apps Script returns them (it returns newest first).
   records = [...records].sort((a, b) =>
     String(a['Specimen Number'] || '').localeCompare(String(b['Specimen Number'] || ''), undefined, { numeric: true }));
+
+  // Rubus: one label per sheet. The "Rubus Sheets" column lists the sheets,
+  // e.g. "P,P,P,F,F" = 3 primocane + 2 floricane. Blank = one ordinary label.
+  const expanded = [];
+  records.forEach(function (r) {
+    const raw = String(r['Rubus Sheets'] || '').trim();
+    const toks = raw ? raw.split(/[\s,;]+/).filter(Boolean) : [];
+    const types = [];
+    toks.forEach(function (t) {
+      const m = t.match(/^(\d+)?\s*(p|f|primocane|floricane)s?$/i);
+      if (!m) return;
+      const n = m[1] ? parseInt(m[1], 10) : 1;
+      const kind = m[2].toLowerCase().charAt(0) === 'p' ? 'Primocane' : 'Floricane';
+      for (let i = 0; i < n; i++) types.push(kind);
+    });
+    if (!types.length) { expanded.push(r); return; }
+    types.forEach(function (kind, i) { expanded.push(Object.assign({}, r, { _sheetType: kind, _sheetNum: i + 1, _sheetTotal: types.length })); });
+  });
+  records = expanded;
+  setStatus('Showing ' + records.length + ' label(s). Click Print Labels to print.');
 
   // Pad to multiple of 4
   const padded = [...records];
