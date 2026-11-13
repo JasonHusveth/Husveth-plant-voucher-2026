@@ -978,7 +978,13 @@ function clearForm() {
   fillSel("assocTree", "+ Add tree or shrub\u2026", []);
   fillSel("assocGram", "+ Add graminoid\u2026", []);
   fillSel("assocForb", "+ Add forb or fern\u2026", []);
+  document.getElementById("hydrology").value = "Upland";
+  document.getElementById("soil").value = "Sand";
+  document.getElementById("sun").value = "Full sun";
+  document.getElementById("state").value = "Minnesota";
   setDate();
+  clearDraft();
+  var dn = document.getElementById("draftNotice"); if (dn) dn.remove();
 }
 
 const SHEETS_URL = "https://script.google.com/macros/s/AKfycbwKyn2fKIY23TEK5eqQnY9OFTvmDf0qCSQuw26hOeKIwW50fs4aAoRDdmW1WQ4QvO9s/exec"; // Paste your Google Apps Script Web App URL here
@@ -1305,7 +1311,85 @@ if ('serviceWorker' in navigator) {
 window.addEventListener("load", function() {
   document.getElementById("state").value = "Minnesota";
   _countyList = (COUNTIES["Minnesota"] || []).slice().sort();
+  restoreDraft();
+  startDraftSaving();
 });
+
+// ── Keep entered data safe when the phone reloads/switches apps ──────────
+const DRAFT_KEY = "voucherDraft";
+const DRAFT_SKIP = ["assocTree","assocGram","assocForb"];   // rebuilt from the NPC code
+const DRAFT_TEXT = ["authorityDisplay","npcPrimaryLabel","npcSecondaryLabel","trsPreview"];
+const DRAFT_BADGE = ["npcPrimaryBadge","npcSecondaryBadge"];
+
+function saveDraft() {
+  try {
+    const d = {f:{}, t:{}, b:{}};
+    document.querySelectorAll("input[id],select[id],textarea[id]").forEach(el => {
+      if (el.type === "file" || el.type === "button" || DRAFT_SKIP.includes(el.id)) return;
+      d.f[el.id] = (el.type === "checkbox" || el.type === "radio") ? el.checked : el.value;
+    });
+    DRAFT_TEXT.forEach(id => { const el = document.getElementById(id); if (el) d.t[id] = el.textContent; });
+    DRAFT_BADGE.forEach(id => { const el = document.getElementById(id); if (el) d.b[id] = el.innerHTML; });
+    d.assoc = selectedAssoc.slice();
+    d.manual = manualSelected;
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+  } catch(e) {}
+}
+
+function clearDraft() {
+  try { localStorage.removeItem(DRAFT_KEY); } catch(e) {}
+}
+
+function restoreDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    if (!d || !d.f) return;
+    Object.keys(d.f).forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (el.type === "checkbox" || el.type === "radio") el.checked = !!d.f[id]; else el.value = d.f[id];
+    });
+    Object.keys(d.t || {}).forEach(id => { const el = document.getElementById(id); if (el) el.textContent = d.t[id]; });
+    Object.keys(d.b || {}).forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = d.b[id]; });
+    // county and municipality pick-lists
+    const st = document.getElementById("state").value || "Minnesota";
+    _countyList = (COUNTIES[st] || []).slice().sort();
+    const co = document.getElementById("county").value;
+    _muniList = [];
+    if (co && MUNI_DATA[st]) {
+      const norm = c => c.replace(" County","").replace(/^St\.\s+/,"Saint ");
+      _muniList = ((MUNI_DATA[st][norm(co)] || MUNI_DATA[st][co]) || []).slice().sort();
+    }
+    // associated-species drop-downs depend on the primary NPC code
+    const npc = document.getElementById("npcPrimaryVal").value;
+    if (npc) updateAssocSpecies(npc);
+    selectedAssoc = Array.isArray(d.assoc) ? d.assoc : [];
+    manualSelected = d.manual || "";
+    renderChips();
+    // note, only if something real was restored
+    const any = ["locality","speciesInput","notes","lat","lon"].some(id => (document.getElementById(id).value || "").trim());
+    if (any) {
+      const n = document.createElement("div");
+      n.id = "draftNotice";
+      n.style.cssText = "background:#fffbe6;border:1px solid #e6c800;border-radius:2px;padding:6px 10px;font-size:11px;color:#7a5f00;margin-bottom:8px;text-align:center;";
+      n.innerHTML = "&#8635; Your entries were restored &mdash; tap <strong>New Record</strong> to clear them.";
+      const wrap = document.querySelector(".app-wrap");
+      if (wrap) wrap.insertBefore(n, wrap.firstChild);
+    }
+  } catch(e) {}
+}
+
+function startDraftSaving() {
+  document.addEventListener("input", saveDraft);
+  document.addEventListener("change", saveDraft);
+  document.addEventListener("click", function(){ setTimeout(saveDraft, 50); });
+  document.addEventListener("visibilitychange", function(){ if (document.visibilityState === "hidden") saveDraft(); });
+  window.addEventListener("pagehide", saveDraft);
+  window.addEventListener("blur", saveDraft);
+  setInterval(saveDraft, 2000);   // catches fills done by buttons (GPS, species, NPC, map)
+}
 </script>
 </body>
 </html>
