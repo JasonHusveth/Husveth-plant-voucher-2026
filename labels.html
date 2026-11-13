@@ -52,7 +52,11 @@ button.primary{background:#1a1a1a;color:#fff;}
 @media print {
   body{background:#fff;padding:0;}
   h1,.controls,.btn-row,.status{display:none!important;}
-  .label-sheet{border:none;padding:0.25in;margin:0;page-break-after:always;}
+  /* Break BEFORE each sheet (not after), with no bottom padding, so a tall sheet
+     can never push an empty trailing fragment onto its own blank page. */
+  .label-sheet{border:none;padding:0.25in 0.25in 0 0.25in;margin:0;page-break-after:auto;break-after:auto;}
+  .label-sheet + .label-sheet{page-break-before:always;break-before:page;}
+  .label{padding-bottom:0;}
   .label-grid{gap:0.5in;}
   .preview-area{max-width:none;}
   @page{size:letter;margin:0;}
@@ -275,12 +279,27 @@ function buildNarrative(r) {
   return { prose: parts.join(' '), assoc };
 }
 
+// Italicize Latin names only. Non-Latin abbreviations and the hybrid sign stay upright:
+// sp., spp., var., subsp., ssp., f., cf., aff., sect., subg., ser., x / ×
+const UPRIGHT_ABBR = /^(spp?\.?|var\.?|subsp\.?|ssp\.?|f\.?|cf\.?|aff\.?|sect\.?|subg\.?|ser\.?|[x\u00d7])$/i;
+function nameHtml(n) {
+  const words = String(n).trim().split(/\s+/);
+  let out = [], run = [];
+  const flush = () => { if (run.length) { out.push('<em>' + esc(run.join(' ')) + '</em>'); run = []; } };
+  words.forEach((w, idx) => {
+    if (idx > 0 && UPRIGHT_ABBR.test(w)) { flush(); out.push(esc(w)); }
+    else run.push(w);
+  });
+  flush();
+  return out.join(' ');
+}
+
 // Render associated species names in italic with plain connecting text
 function assocHtml(assocStr) {
   if (!assocStr) return '';
   const names = assocStr.split(',').map(s => s.trim()).filter(Boolean);
   if (!names.length) return '';
-  const italicNames = names.map(n => '<em>' + esc(n) + '</em>').join(', ');
+  const italicNames = names.map(nameHtml).join(', ');
   return 'Associated species include: ' + italicNames + '.';
 }
 
@@ -334,7 +353,7 @@ function buildLabel(r) {
   return `<div class="label">
   <div class="label-locality">Plants of ${esc(loc)}</div>
   <div class="label-county">${municipality ? esc(municipality) + ", " + esc(county) + " County, " + esc(state) : esc(county) + " County, " + esc(state)}</div>
-  <div class="label-name"><em>${esc(sp)}</em>${auth ? ' <span class="auth">' + esc(auth) + '</span>' : ''}</div>
+  <div class="label-name">${nameHtml(sp)}${auth ? ' <span class="auth">' + esc(auth) + '</span>' : ''}</div>
   <div class="label-body">${bodyHtml}</div>
   ${coordLine ? `<div class="label-coords">${coordLine}</div>` : ''}
   ${(trsLine || r._sheetType) ? `<div class="label-coords label-trsrow"><span>${esc(trsLine)}</span>${r._sheetType ? '<span class="label-sheetinfo">Sheet ' + r._sheetNum + ' of ' + r._sheetTotal + ': ' + esc(r._sheetType) + '</span>' : ''}</div>` : ''}
