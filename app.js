@@ -255,12 +255,59 @@ function matches(q) {
   }
   return out.sort((a, b) => a[0] - b[0] || a[1].n.localeCompare(b[1].n)).slice(0, 15).map(x => x[1]);
 }
+// ---------- likely species for a layer: frequency in the likely classes here, weighted by how likely each class is ----------
+// Before species are entered the class weights come from the section, the Landscape answers and the DNR distribution maps
+// for the plot's LTA; once 3+ species are entered they come from the probability ranking itself.
+const WOODY = new Set(['D', 'E', 'B', 'C']);
+function keyName(key) {
+  const D_ = D._byKey || (D._byKey = (() => { const m = new Map(); for (const x of D.species) if (!m.has(x.k) || x.r === 'species') m.set(x.k, x); return m; })());
+  for (const k of key.split('|')) if (!k.startsWith('g:') && !k.startsWith('b:') && D_.has(k)) return D_.get(k);
+  return null;
+}
+function likelySpecies(layer, n = 20) {
+  const p = S.plot; if (!p.section) return [];
+  const cls = paletteClasses().filter(c => D.profiles[c]); if (!cls.length) return [];
+  const ctx = locCtx(); let w = {};
+  if (p.species.length >= 3) for (const r of rankClasses(p, D, cls, undefined, classPriors(cls, ctx))) w[r.code] = r.prob;
+  else for (const c of cls) { const st = classStatus(c, ctx); w[c] = Math.exp(st ? PRIOR[st] : 0); }
+  const z = Object.values(w).reduce((a, b) => a + b, 0) || 1;
+  const score = new Map();
+  const add = (key, f, c) => score.set(key, (score.get(key) || 0) + w[c] / z * f / 100);
+  for (const c of cls) {
+    const pr = D.profiles[c];
+    if (layer === 'C' || layer === 'S') {
+      for (const [k, L] of Object.entries(pr.t)) { const f = layer === 'C' ? L.C?.[0] : Math.max(L.S?.[0] || 0, L.U?.[0] || 0); if (f) add(k, f, c); }
+    } else if (layer === 'H') {
+      for (const [k, L] of Object.entries(pr.t)) { const f = Math.max(L.H?.[0] || 0, L.U?.[0] || 0); if (f) add(k, f, c); }
+      for (const [k, [f]] of Object.entries(pr.g)) { const sp = keyName(k); if (sp && WOODY.has((sp.p || '').split(',')[0]) && !pr.t[k]) add(k, f, c); }
+    } else {
+      for (const [k, [f]] of Object.entries(pr.g)) { const sp = keyName(k); if (sp && !WOODY.has((sp.p || '').split(',')[0])) add(k, f, c); }
+    }
+  }
+  const have = new Set(p.species.filter(s => s.layer === layer).map(s => binom(s.n)));
+  const out = [];
+  for (const [k, v] of [...score].sort((a, b) => b[1] - a[1])) {
+    const sp = keyName(k); if (!sp || have.has(sp.k) || out.some(o => o.sp.n === sp.n)) continue;
+    out.push({ sp, pct: Math.round(v * 100) }); if (out.length >= n) break;
+  }
+  return out;
+}
+function suggestionsHtml(layer) {
+  const L = likelySpecies(layer);
+  if (!S.plot.section) return '<p class="muted">Set the section on the Site tab to see likely species here.</p>';
+  if (!L.length) return '';
+  const basis = S.plot.species.length >= 3 ? 'the classes your plot ranks highest' : locCtx() ? 'the classes likely in this LTA' : `the classes in ${esc(S.plot.section)}`;
+  return `<p class="muted" style="margin:8px 0 4px">Most likely in this layer, from ${basis} (tap to add; type above to search everything):</p>
+    <div class="results">${L.map(({ sp, pct }) => `<div data-add="${esc(sp.n)}"><b>${esc(sp.c || sp.n)}</b> <i>${esc(sp.n)}</i> <span class="muted">· ~${pct}% of plots</span></div>`).join('')}</div>`;
+}
 function showMatches() {
   const q = $('#q').value; lastQuery.text = q; lastQuery.layer = S.tab;
+  if (!q.trim()) { $('#matches').innerHTML = suggestionsHtml(S.tab); return; }
   const m = matches(q);
   $('#matches').innerHTML = m.length ? `<div class="results">${m.map(s => `<div data-add="${esc(s.n)}"><b>${esc(s.c || s.n)}</b> <i>${esc(s.n)}${s.ns && s.ns !== 'N' ? ' · non-native' : ''}</i></div>`).join('')}</div>` : (q ? '<p class="muted">No match in MNTaxa 2026.</p>' : '');
 }
 $('#main').addEventListener('keyup', e => { if (e.target.id === 'q') showMatches(); });
+$('#main').addEventListener('input', e => { if (e.target.id === 'q' && !e.target.value) showMatches(); });
 function addSpecies(name, layer) {
   if (!S.plot.species.some(s => s.n === name && s.layer === layer))
     S.plot.species.push({ id: Math.random().toString(36).slice(2, 9), n: name, layer, cover: layer === 'G' ? 1 : 2 });
@@ -274,7 +321,7 @@ function layerTab(layer) {
     <label>Total cover of this layer (used for type and subtype cover statements)</label>
     <div class="cov">${COVER.map((c, i) => `<button data-lcov="${layer}§${i + 1}" class="${+(S.plot.layerCover?.[layer]) === i + 1 ? 'on' : ''}">${c}</button>`).join('')}</div>
     <label>Add species</label>
-    <div class="search"><input id="q" placeholder="Type common or scientific name (old names work too)" autocomplete="off" autocapitalize="off"></div><div id="matches"></div></div>
+    <div class="search"><input id="q" placeholder="Type common or scientific name (old names work too)" autocomplete="off" autocapitalize="off"></div><div id="matches">${suggestionsHtml(layer)}</div></div>
     <div class="card">${list.length ? list.map(s => { const t = byName.get(s.n) || {}; return `<div class="sp"><div class="nm">${esc(t.c || s.n)}<i>${esc(s.n)}</i></div><button class="x" data-del="${s.id}" aria-label="Remove">×</button>
       <div class="cov">${COVER.map((c, i) => `<button data-cov="${i + 1}" data-id="${s.id}" class="${s.cover === i + 1 ? 'on' : ''}">${c}</button>`).join('')}</div></div>`; }).join('')
       : '<p class="muted">No species in this layer yet.</p>'}</div></section>`;
