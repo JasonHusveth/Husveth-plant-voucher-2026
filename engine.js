@@ -5,7 +5,7 @@
 //   3. the DNR probability key (wooded classes, LMF and EBF sections only)
 // plus floristic quality (mean C, FQI) from MNTaxa 2026 C values.
 
-export const ENGINE_VERSION = '0.8.0';
+export const ENGINE_VERSION = '0.9.0';
 
 // ---------- species keys ----------
 export function binom(name) {
@@ -51,7 +51,10 @@ const TREE_LAYERS = { C: ['C'], S: ['S'], H: ['H'], U: ['S', 'H'] };
 // ---------- 1. likelihood ranking ----------
 // Bernoulli naive Bayes over each class's listed features, with background-relative scoring so that
 // classes with short species lists are not favoured. Unlisted plot species get a small probability.
-export const PARAMS = { eps: 0.03, absWeight: 0.5, temperature: 4, minFeatures: 1 };
+export const PARAMS = { eps: 0.03, epsProv: 0.03, absWeight: 0.5, temperature: 4, minFeatures: 1 };
+// epsProv: penalty for a plot species a provisional profile (class without a DNR frequency table) does not list.
+// test/provisional.mjs: at 0.03 provisional classes win 0.2% of plots simulated from other classes and 98% of their own;
+// softer values (0.06-0.2) let them win 1-28% of other classes' plots, so they get the same treatment as the rest.
 
 export function classFeatures(profile) {
   const f = [];
@@ -79,9 +82,9 @@ export function rankClasses(plot, data, candidates, params = PARAMS, priors = nu
     }
     for (const k of plotKeys) {
       const g = k.split(' ')[0];
-      if (!explained.has(k) && !explained.has(g)) ll += Math.log(params.eps);
+      if (!explained.has(k) && !explained.has(g)) ll += Math.log(prof.prov ? params.epsProv : params.eps);
     }
-    out.push({ code, ll, hits, misses, nFeat: feats.length });
+    out.push({ code, ll, hits, misses, nFeat: feats.length, prov: !!prof.prov });
   }
   if (!out.length) return [];
   for (const o of out) { o.prior = priors?.[o.code] ?? 0; o.score = o.ll / params.temperature + o.prior; }

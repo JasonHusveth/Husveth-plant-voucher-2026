@@ -344,9 +344,12 @@ function resultsTab() {
   const ranked = rankClasses(p, D, cands, undefined, classPriors(cands, ctx));
   const top = ranked[0];
   // key run for the top-ranked class (and the runner-up when it uses a different key)
-  const keyIds = [...new Set(ranked.slice(0, 3).flatMap(r => keysForClass(p.section, r.code, D).slice(0, 1)))].slice(0, 2);
+  const keyIds = [...new Set(ranked.slice(0, 4).flatMap(r => keysForClass(p.section, r.code, D).slice(0, 1)))].slice(0, 3);
   const runs = keyIds.map(id => ({ id, key: D.classKeys[p.section][id], run: runClassKey(p, D.classKeys[p.section][id], 'a', p.keyChoices[id] || {}) }));
-  const keyed = runs.find(r => r.run.result);
+  // headline key: one whose result agrees with the top-ranked class, else the first key that finished
+  const keyed = runs.find(r => r.run.result && top && r.run.result.startsWith(top.code)) || runs.find(r => r.run.result);
+  const defaults = r => r.run.path.filter(st => st.auto && st.evidence === 0 && st.leads.length > 1).length;
+  const keyList = runs.length > 1 ? `<p class="muted" style="margin-top:6px"><b>All DNR keys run:</b> ${runs.map(r => `${esc(r.id)} ${esc(r.key.title || '')} → <b>${esc(r.run.result || (r.run.stop === 'choose' ? 'needs your choice' : 'stopped'))}</b>${defaults(r) ? ` <span class="badge warn">${defaults(r)} couplet${defaults(r) > 1 ? 's' : ''} by default</span>` : ''}`).join(' · ')}</p>` : '';
   const agree = keyed && top && keyed.run.result.startsWith(top.code);
   const fq = floristicQuality(p, D, sec.prov, { minFQI: S.settings.minFQI, flagBelow: S.settings.flagBelow });
   const name = c => esc(comm(c)?.name || '');
@@ -355,14 +358,14 @@ function resultsTab() {
   if (keyed && top) head = `<div class="card"><h2>Summary</h2>
     <div class="verdict">${esc(keyed.run.result)} ${name(keyed.run.result.slice(0, 5))}</div>
     <p>${agree ? `<span class="badge good">Key and probabilities agree</span> The probability ranking puts ${esc(top.code)} first at ${Math.round(top.prob * 100)}%.`
-      : `<span class="badge warn">Key and probabilities disagree</span> The key gives ${esc(keyed.run.result)}; the probability ranking puts ${esc(top.code)} first (${Math.round(top.prob * 100)}%). Check the fact sheets for both.`}</p></div>`;
-  else if (top) head = `<div class="card"><h2>Summary</h2><div class="verdict">${esc(top.code)} ${name(top.code)}</div><p>Most probable class at ${Math.round(top.prob * 100)}%. ${runs.some(r => r.run.stop === 'choose') ? 'The key needs your answer below to finish.' : ''}</p></div>`;
+      : `<span class="badge warn">Key and probabilities disagree</span> The key gives ${esc(keyed.run.result)}; the probability ranking puts ${esc(top.code)} first (${Math.round(top.prob * 100)}%). Check the fact sheets for both.`}</p>${keyList}</div>`;
+  else if (top) head = `<div class="card"><h2>Summary</h2><div class="verdict">${esc(top.code)} ${name(top.code)}</div><p>Most probable class at ${Math.round(top.prob * 100)}%. ${runs.some(r => r.run.stop === 'choose') ? 'The key needs your answer below to finish.' : ''}</p>${keyList}</div>`;
   // probability ranking
-  const rank = `<div class="card"><h2>Probability ranking <span class="muted">${cands.length} classes with frequency tables in ${esc(p.section)}</span></h2>
-    ${ranked.slice(0, 8).map(r => `<div class="rank"><span class="code">${r.code}</span><span>${name(r.code)}${ctx && classStatus(r.code, ctx) ? ` <span class="badge ${{ D: 'good', Dn: 'good', P: '', Q: '', N: 'warn' }[classStatus(r.code, ctx)]}">${STATUS_TXT[classStatus(r.code, ctx)]}</span>` : ''}</span><span class="pct">${r.prob < 0.01 ? '<1' : Math.round(r.prob * 100)}%</span>
+  const rank = `<div class="card"><h2>Probability ranking <span class="muted">${cands.length} classes in ${esc(p.section)}${ranked.some(r => r.prov) ? ', some provisional' : ''}</span></h2>
+    ${ranked.slice(0, 8).map(r => `<div class="rank"><span class="code">${r.code}</span><span>${name(r.code)}${ctx && classStatus(r.code, ctx) ? ` <span class="badge ${{ D: 'good', Dn: 'good', P: '', Q: '', N: 'warn' }[classStatus(r.code, ctx)]}">${STATUS_TXT[classStatus(r.code, ctx)]}</span>` : ''}</span>${r.prov ? ' <span class="badge warn">provisional: no DNR frequency table</span>' : ''}<span class="pct">${r.prob < 0.01 ? '<1' : Math.round(r.prob * 100)}%</span>
       <div class="bar"><span style="width:${Math.max(1, r.prob * 100)}%"></span></div>
       <div class="why">${r.hits.length ? 'Found: ' + feats(r.hits, 6) : ''}${r.misses.length ? `<br>Expected, not recorded: ${feats(r.misses, 5)}` : ''}</div></div>`).join('')}
-    <p class="muted">Classes without a published frequency table (cliffs, talus, shores, outcrops and a few others) are reached by the key only.${ctx ? ` Ranking includes the DNR distribution maps for ${esc(ctx.ltaName)}: classes possible here count about half, classes not mapped here about a tenth, before the plants are weighed.` : ''}</p></div>`;
+    <p class="muted">Classes marked provisional have no DNR frequency table; their profile is estimated from the fact-sheet description, indicator tables and the probability key. Cliffs, talus and shores are reached by the key only.${ctx ? ` Ranking includes the DNR distribution maps for ${esc(ctx.ltaName)}: classes possible here count about half, classes not mapped here about a tenth, before the plants are weighed.` : ''}</p></div>`;
   // keys
   const keys = runs.map(({ id, key, run }) => `<div class="card"><h2>DNR key ${esc(id)} <span class="muted">${esc(key.title || '')} · ${key.book} p. ${key.pages.join(', ')}</span></h2>
     ${run.path.map(st => `<div class="step chosen"><b>Couplet ${esc(st.at)}</b> · score ${st.sum}${st.scored.length ? ` (${st.scored.map(x => `${esc(x.c)} ${x.v > 0 ? '+' : ''}${x.v}`).join(', ')})` : ''}<br>
@@ -373,7 +376,8 @@ function resultsTab() {
     ${run.result ? `<p class="verdict">→ ${esc(run.result)} ${name(run.result.slice(0, 5))} <span class="muted">p. ${run.page ?? ''}</span></p>` : ''}
     ${run.stop && run.stop !== 'choose' ? `<p class="muted">Key stopped (${esc(run.stop)} ${esc(run.target || '')}).</p>` : ''}</div>`).join('');
   // probability keys (wooded classes, LMF & EBF sections)
-  const pks = (D.probKeys[p.section] || []).filter(k => k.classes.length && k.classes.some(c => ranked.slice(0, 4).some(r => r.code === c)));
+  const keyRes = runs.map(r => r.run.result?.slice(0, 5)).filter(Boolean);
+  const pks = (D.probKeys[p.section] || []).filter(k => k.classes.length && k.classes.some(c => ranked.slice(0, 6).some(r => r.code === c) || keyRes.includes(c)));
   const pk = pks.map(k => { const r = runProbKey(p, k); const tot = r.ranked.reduce((a, x) => a + x[1], 0) || 1;
     return `<div class="card"><h2>DNR probability key ${esc(k.id)} <span class="muted">${k.book} p. ${k.page}</span></h2>
       ${r.ranked.map(([c, v]) => `<div class="rank"><span class="code">${c}</span><span>${name(c)}</span><span class="pct">${v} pts</span><div class="bar"><span style="width:${100 * v / tot}%"></span></div></div>`).join('')}
@@ -434,7 +438,8 @@ function label(key) {
 // ---------------------------------------------------------------- saved plots & export
 function savePlot() {
   const sec = D.sections.find(s => s.code === S.plot.section);
-  const ranked = S.plot.section ? rankClasses(S.plot, D, candidates()) : [];
+  const cands = S.plot.section ? candidates() : [];
+  const ranked = S.plot.section ? rankClasses(S.plot, D, cands, undefined, classPriors(cands, locCtx())) : [];
   const rec = JSON.parse(JSON.stringify(S.plot));
   rec.savedAt = new Date().toISOString();
   rec.result = ranked.slice(0, 3).map(r => ({ code: r.code, prob: +r.prob.toFixed(3) }));
