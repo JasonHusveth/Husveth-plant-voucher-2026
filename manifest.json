@@ -1,3 +1,25 @@
-{ "name": "NPC Field Key", "short_name": "NPC Key", "description": "Minnesota native plant community field key (CCES internal)",
-  "start_url": "./", "scope": "./", "display": "standalone", "background_color": "#f6f5f1", "theme_color": "#2f5233",
-  "icons": [ { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }, { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" } ] }
+{
+  "name": "MN Vascular Plant Voucher",
+  "short_name": "Plant Voucher",
+  "description": "Minnesota Vascular Plant Voucher Specimen Record field data collection app",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f0ece4",
+  "theme_color": "#1a1a1a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
