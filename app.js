@@ -1,4 +1,4 @@
-import { rankClasses, rankUnits, runClassKey, runProbKey, floristicQuality, candidatesFor, keysForClass, binom, ecsLookup, distStatus, ltasNear, ENGINE_VERSION } from './engine.js';
+import { rankClasses, rankUnits, runClassKey, runProbKey, floristicQuality, candidatesFor, keysForClass, binom, ecsLookup, distStatus, ltasNear, minerotrophic, mineroAdjust, completeness, PARAMS, ENGINE_VERSION } from './engine.js';
 
 // ---------------------------------------------------------------- storage (IndexedDB, saved on every change)
 const DB = 'npc-field-key', STORE = 'kv';
@@ -129,6 +129,13 @@ function classStatus(code, ctx) {
   const own = distStatus(code, [ctx.lta], ctx.dist); if (!own || own === 'D') return own;
   return ctx.near.length && distStatus(code, ctx.near, ctx.dist) === 'D' ? 'Dn' : own;
 }
+// one place that ranks classes the way the Results tab shows them: DNR map priors for the LTA, the minerotrophic
+// rule for the acid peatlands, and absences weighted by how complete the species list is
+function rankPlot(p, codes, ctx = locCtx()) {
+  const pri = classPriors(codes, ctx);
+  for (const [c, v] of Object.entries(mineroAdjust(codes, minerotrophic(p, D)))) pri[c] = (pri[c] || 0) + v;
+  return rankClasses(p, D, codes, { ...PARAMS, absWeight: PARAMS.absWeight * completeness(p, p.listMode || 'auto') }, pri);
+}
 function classPriors(codes, ctx) { const o = {}; if (ctx) for (const c of codes) { const st = classStatus(c, ctx); if (st) o[c] = PRIOR[st]; } return o; }
 function paletteClasses() {                      // every class in the section (keyed-only classes too), narrowed by the system answers
   const sec = D.sections.find(x => x.code === S.plot.section); if (!sec) return [];
@@ -227,6 +234,7 @@ $('#main').addEventListener('click', async e => {
   }
   const add = t.closest('[data-add]'); if (add) { addSpecies(add.dataset.add, S.tab); return; }
   const lcov = t.closest('[data-lcov]'); if (lcov) { const [L, r] = lcov.dataset.lcov.split('§'); S.plot.layerCover ||= {}; S.plot.layerCover[L] = +S.plot.layerCover[L] === +r ? '' : r; save(); render(); return; }
+  const lm = t.closest('[data-lm]'); if (lm) { S.plot.listMode = lm.dataset.lm; save(); render(); return; }
   const vc = t.closest('[data-viewclass]'); if (vc) { S.viewClass = vc.dataset.viewclass; save(); render(); return; }
   const cov = t.closest('[data-cov]'); if (cov) { const s = S.plot.species.find(x => x.id === cov.dataset.id); s.cover = +cov.dataset.cov; save(); render(); return; }
   const del = t.closest('[data-del]'); if (del) { S.plot.species = S.plot.species.filter(x => x.id !== del.dataset.del); save(); render(); return; }
@@ -268,7 +276,7 @@ function likelySpecies(layer, n = 20) {
   const p = S.plot; if (!p.section) return [];
   const cls = paletteClasses().filter(c => D.profiles[c]); if (!cls.length) return [];
   const ctx = locCtx(); let w = {};
-  if (p.species.length >= 3) for (const r of rankClasses(p, D, cls, undefined, classPriors(cls, ctx))) w[r.code] = r.prob;
+  if (p.species.length >= 3) for (const r of rankPlot(p, cls, ctx)) w[r.code] = r.prob;
   else for (const c of cls) { const st = classStatus(c, ctx); w[c] = Math.exp(st ? PRIOR[st] : 0); }
   const z = Object.values(w).reduce((a, b) => a + b, 0) || 1;
   const score = new Map();
@@ -341,7 +349,7 @@ function resultsTab() {
   const sec = D.sections.find(s => s.code === p.section);
   const cands = candidates();
   const ctx = locCtx();
-  const ranked = rankClasses(p, D, cands, undefined, classPriors(cands, ctx));
+  const ranked = rankPlot(p, cands, ctx);
   const top = ranked[0];
   // key run for the top-ranked class (and the runner-up when it uses a different key)
   const keyIds = [...new Set(ranked.slice(0, 4).flatMap(r => keysForClass(p.section, r.code, D).slice(0, 1)))].slice(0, 3);
@@ -362,9 +370,13 @@ function resultsTab() {
   else if (top) head = `<div class="card"><h2>Summary</h2><div class="verdict">${esc(top.code)} ${name(top.code)}</div><p>Most probable class at ${Math.round(top.prob * 100)}%. ${runs.some(r => r.run.stop === 'choose') ? 'The key needs your answer below to finish.' : ''}</p>${keyList}</div>`;
   // probability ranking
   const rank = `<div class="card"><h2>Probability ranking <span class="muted">${cands.length} classes in ${esc(p.section)}${ranked.some(r => r.prov) ? ', some provisional' : ''}</span></h2>
-    ${ranked.slice(0, 8).map(r => `<div class="rank"><span class="code">${r.code}</span><span>${name(r.code)}${ctx && classStatus(r.code, ctx) ? ` <span class="badge ${{ D: 'good', Dn: 'good', P: '', Q: '', N: 'warn' }[classStatus(r.code, ctx)]}">${STATUS_TXT[classStatus(r.code, ctx)]}</span>` : ''}</span>${r.prov ? ' <span class="badge warn">provisional: no DNR frequency table</span>' : ''}<span class="pct">${r.prob < 0.01 ? '<1' : Math.round(r.prob * 100)}%</span>
+    ${ranked.slice(0, 8).map(r => `<div class="rank"><span class="code">${r.code}</span><span>${name(r.code)}${ctx && classStatus(r.code, ctx) ? ` <span class="badge ${{ D: 'good', Dn: 'good', P: '', Q: '', N: 'warn' }[classStatus(r.code, ctx)]}">${STATUS_TXT[classStatus(r.code, ctx)]}</span>` : ''}</span>${r.expert ? ' <span class="badge">field-based profile (J. Husveth); no DNR frequency table</span>' : r.prov ? ' <span class="badge warn">provisional: no DNR frequency table</span>' : ''}<span class="pct">${r.prob < 0.01 ? '<1' : Math.round(r.prob * 100)}%</span>
       <div class="bar"><span style="width:${Math.max(1, r.prob * 100)}%"></span></div>
       <div class="why">${r.hits.length ? 'Found: ' + feats(r.hits, 6) : ''}${r.misses.length ? `<br>Expected, not recorded: ${feats(r.misses, 5)}` : ''}</div></div>`).join('')}
+    ${(() => { const m = minerotrophic(p, D); const peat = ranked.slice(0, 8).some(r => /^(AP|FP|OP)/.test(r.code));
+      return peat ? `<p class="muted"><b>Minerotrophic indicators:</b> ${m.n} of ${m.total} species are not on the DNR bog-species list${m.n ? ` (${m.species.slice(0, 8).map(k => esc(keyName(k)?.c || k)).join(', ')}${m.n > 8 ? '…' : ''})` : ''}. Bogs (APn80, APn90) are marked down for more than ${1} and the poor conifer swamp (APn81) for more than 4.</p>` : ''; })()}
+    <div class="row" style="align-items:center"><label style="margin:0">Species list</label><div class="seg" data-listmode>${[['auto', 'Auto'], ['partial', 'Partial'], ['complete', 'Complete relevé']].map(([v, t]) => `<button data-lm="${v}" class="${(p.listMode || 'auto') === v ? 'on' : ''}">${t}</button>`).join('')}</div></div>
+    <p class="muted">Missing species count ${Math.round(completeness(p, p.listMode || 'auto') * 100)}% as much as in a complete relevé (Auto scales with the number of species entered, full weight at 25).</p>
     <p class="muted">Classes marked provisional have no DNR frequency table; their profile is estimated from the fact-sheet description, indicator tables and the probability key. Cliffs, talus and shores are reached by the key only.${ctx ? ` Ranking includes the DNR distribution maps for ${esc(ctx.ltaName)}: classes possible here count about half, classes not mapped here about a tenth, before the plants are weighed.` : ''}</p></div>`;
   // keys
   const keys = runs.map(({ id, key, run }) => `<div class="card"><h2>DNR key ${esc(id)} <span class="muted">${esc(key.title || '')} · ${key.book} p. ${key.pages.join(', ')}</span></h2>
@@ -439,7 +451,7 @@ function label(key) {
 function savePlot() {
   const sec = D.sections.find(s => s.code === S.plot.section);
   const cands = S.plot.section ? candidates() : [];
-  const ranked = S.plot.section ? rankClasses(S.plot, D, cands, undefined, classPriors(cands, locCtx())) : [];
+  const ranked = S.plot.section ? rankPlot(S.plot, cands) : [];
   const rec = JSON.parse(JSON.stringify(S.plot));
   rec.savedAt = new Date().toISOString();
   rec.result = ranked.slice(0, 3).map(r => ({ code: r.code, prob: +r.prob.toFixed(3) }));

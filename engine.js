@@ -5,7 +5,7 @@
 //   3. the DNR probability key (wooded classes, LMF and EBF sections only)
 // plus floristic quality (mean C, FQI) from MNTaxa 2026 C values.
 
-export const ENGINE_VERSION = '0.9.0';
+export const ENGINE_VERSION = '0.11.0';
 
 // ---------- species keys ----------
 export function binom(name) {
@@ -51,7 +51,9 @@ const TREE_LAYERS = { C: ['C'], S: ['S'], H: ['H'], U: ['S', 'H'] };
 // ---------- 1. likelihood ranking ----------
 // Bernoulli naive Bayes over each class's listed features, with background-relative scoring so that
 // classes with short species lists are not favoured. Unlisted plot species get a small probability.
-export const PARAMS = { eps: 0.03, epsProv: 0.03, absWeight: 0.5, temperature: 4, minFeatures: 1 };
+export const PARAMS = { eps: 0.03, epsProv: 0.03, absWeight: 0.5, temperature: 4, minFeatures: 1, coverW: 0.8 };
+// coverW: canopy trees are also scored on cover: each cover-rank step between the plot and the class's typical canopy
+// cover costs coverW (log units), so which conifer DOMINATES (black spruce vs tamarack vs cedar) counts, not just presence.
 // epsProv: penalty for a plot species a provisional profile (class without a DNR frequency table) does not list.
 // test/provisional.mjs: at 0.03 provisional classes win 0.2% of plots simulated from other classes and 98% of their own;
 // softer values (0.06-0.2) let them win 1-28% of other classes' plots, so they get the same treatment as the rest.
@@ -60,13 +62,15 @@ export function classFeatures(profile) {
   const f = [];
   for (const [key, [freq]] of Object.entries(profile.g)) f.push({ key, p: freq / 100, layers: null });
   for (const [key, lays] of Object.entries(profile.t)) {
-    for (const [lay, [freq]] of Object.entries(lays)) f.push({ key, p: freq / 100, layers: TREE_LAYERS[lay] || ['S', 'H'] });
+    for (const [lay, [freq, cv]] of Object.entries(lays)) f.push({ key, p: freq / 100, layers: TREE_LAYERS[lay] || ['S', 'H'], canopyCover: lay === 'C' ? cv : null });
   }
   return f;
 }
 
 export function rankClasses(plot, data, candidates, params = PARAMS, priors = null) {
   const idx = plotIndex(plot);
+  const canopy = new Map();                                    // canopy cover rank by species key
+  for (const s of plot.species || []) if (s.n && s.layer === 'C' && s.cover) { const k = binom(s.n); canopy.set(k, Math.max(canopy.get(k) || 0, s.cover)); }
   const plotKeys = [...new Set((plot.species || []).filter(s => s.n).map(s => binom(s.n)))];
   const out = [];
   for (const code of candidates) {
@@ -77,14 +81,17 @@ export function rankClasses(plot, data, candidates, params = PARAMS, priors = nu
       const present = f.layers ? f.layers.some(L => hasAny(idx.byLayer[L], f.key)) || (hasAny(idx.any, f.key) && !Object.keys(prof.g).length)
                                : hasAny(idx.any, f.key);
       const p = Math.min(Math.max(f.p, 0.01), 0.99);
-      if (present) { ll += Math.log(p); f.key.split('|').forEach(k => explained.add(k.replace(/^g:/, ''))); if (p >= 0.5) hits.push(f); }
+      if (present) {
+        ll += Math.log(p); f.key.split('|').forEach(k => explained.add(k.replace(/^g:/, ''))); if (p >= 0.5) hits.push(f);
+        if (f.canopyCover && params.coverW) { const r = Math.max(...f.key.split('|').map(k => canopy.get(k) || 0)); if (r) ll -= params.coverW * Math.abs(r - f.canopyCover); }
+      }
       else { ll += params.absWeight * Math.log(1 - p); if (p >= 0.6) misses.push(f); }
     }
     for (const k of plotKeys) {
       const g = k.split(' ')[0];
       if (!explained.has(k) && !explained.has(g)) ll += Math.log(prof.prov ? params.epsProv : params.eps);
     }
-    out.push({ code, ll, hits, misses, nFeat: feats.length, prov: !!prof.prov });
+    out.push({ code, ll, hits, misses, nFeat: feats.length, prov: !!prof.prov, expert: prof.expert || null });
   }
   if (!out.length) return [];
   for (const o of out) { o.prior = priors?.[o.code] ?? 0; o.score = o.ll / params.temperature + o.prior; }
@@ -298,6 +305,35 @@ export function ltasNear(lat, lon, ecs, km = 1) {
     if (f.polys.some(poly => inRing(x, y, poly[0]) && !poly.slice(1).some(h => inRing(x, y, h))) || nearestKm(x, y, f.polys.flat(), kx, ky, 0.03) <= km) out.add(f.ltaCode);
   }
   return [...out];
+}
+
+// ---------- 6. minerotrophic indicators (DNR bog-species list) ----------
+// Plot species not on the DNR "non-minerotrophic peatland species" list are minerotrophic indicators. The guides say they
+// are absent from bogs (APn80, APn90; a few transient individuals allowed) and present but limited in the poor conifer
+// swamp (APn81). Returns log-score adjustments for those classes; thresholds are in MINERO_W.
+export const MINERO_W = { bogFree: 1, bogEach: -1.0, bogCap: -5, poorFree: 4, poorEach: -0.6, poorCap: -4 };
+export function minerotrophic(plot, data) {
+  const bog = new Set(data.bogList || []), seen = new Map();
+  for (const s of plot.species || []) {
+    if (!s.n) continue; const k = binom(s.n); if (bog.has(k)) continue;
+    seen.set(k, Math.max(seen.get(k) || 0, s.cover || 0));
+  }
+  const all = new Set((plot.species || []).filter(s => s.n).map(s => binom(s.n)));
+  return { n: seen.size, total: all.size, species: [...seen.keys()] };
+}
+export function mineroAdjust(classes, m, W = MINERO_W) {
+  const out = {};
+  for (const c of classes) {
+    if (c === 'APn80' || c === 'APn90') out[c] = Math.max(W.bogCap, W.bogEach * Math.max(0, m.n - W.bogFree));
+    else if (c === 'APn81') out[c] = Math.max(W.poorCap, W.poorEach * Math.max(0, m.n - W.poorFree));
+  }
+  return out;
+}
+// how much missing species should count: a short list is probably incomplete, so absences weigh less until ~25 species
+export function completeness(plot, mode = 'auto') {
+  if (mode === 'complete') return 1;
+  const n = new Set((plot.species || []).filter(s => s.n).map(s => binom(s.n))).size;
+  return mode === 'partial' ? Math.min(0.5, n / 25) : Math.min(1, n / 25);
 }
 
 // ---------- which keys apply ----------
