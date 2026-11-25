@@ -5,7 +5,7 @@
 //   3. the DNR probability key (wooded classes, LMF and EBF sections only)
 // plus floristic quality (mean C, FQI) from MNTaxa 2026 C values.
 
-export const ENGINE_VERSION = '0.11.0';
+export const ENGINE_VERSION = '0.12.1';
 
 // ---------- species keys ----------
 export function binom(name) {
@@ -282,10 +282,12 @@ const layerWord = L => ({ C: 'canopy', S: 'subcanopy', H: 'shrub layer', G: 'gro
 // ---------- 5. DNR distribution maps: documented / possible LTAs ----------
 // dist[class] = {D: [lta codes], P: [lta codes], t: {typeCode: [lta codes with relevé dots]}} read from the fact-sheet maps.
 // Points near an LTA boundary take the best status among the LTAs within reach (map shading is generalized).
-export const DIST_W = { D: 0, P: -0.7, Q: -0.7, N: -2.3 };          // log-prior added to the class score: possible ~1/2, not mapped ~1/10
+export const DIST_W = { D: 0, R: 0, P: -0.7, Q: -0.7, N: -2.3 };          // log-prior added to the class score: possible ~1/2, not mapped ~1/10
 export function distStatus(cls, ltaCodes, dist) {
   const d = dist?.[cls]; if (!d || !ltaCodes?.length) return null;
   if (ltaCodes.some(c => d.D.includes(c))) return 'D';
+  // classes described without relevés (e.g. WFs55) have maps that show only 'possible' LTAs: there that is the range
+  if (!d.D.length && ltaCodes.some(c => d.P.includes(c))) return 'R';
   if (ltaCodes.some(c => d.P.includes(c))) return 'P';
   if (ltaCodes.some(c => d.Q?.includes(c))) return 'Q';      // DNR '?' : occurrence unknown / unconfirmed
   if (ltaCodes.every(c => d.U?.includes(c))) return null;     // map unreadable here: no prior

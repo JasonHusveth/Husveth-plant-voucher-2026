@@ -122,8 +122,8 @@ function locCtx() {
   const v = r && !r.outside && r.ltaCode ? { lta: r.ltaCode, ltaName: r.lta, near: ltasNear(p.lat, p.lon, ECS, 1).filter(c => c !== r.ltaCode), dist: DIST } : null;
   _ctx = { key, v }; return v;
 }
-const PRIOR = { D: 0, Dn: -0.35, P: -0.7, Q: -0.7, N: -2.3 };
-const STATUS_TXT = { D: 'documented in this LTA', Dn: 'documented in an adjacent LTA', P: 'possible in this LTA', Q: 'unknown here (DNR ?)', N: 'not mapped here' };
+const PRIOR = { D: 0, Dn: -0.35, R: 0, P: -0.7, Q: -0.7, N: -2.3 };
+const STATUS_TXT = { D: 'documented in this LTA', Dn: 'documented in an adjacent LTA', R: 'in the DNR mapped range', P: 'possible in this LTA', Q: 'unknown here (DNR ?)', N: 'not mapped here' };
 function classStatus(code, ctx) {
   if (!ctx) return null;
   const own = distStatus(code, [ctx.lta], ctx.dist); if (!own || own === 'D') return own;
@@ -136,6 +136,17 @@ function rankPlot(p, codes, ctx = locCtx()) {
   for (const [c, v] of Object.entries(mineroAdjust(codes, minerotrophic(p, D)))) pri[c] = (pri[c] || 0) + v;
   return rankClasses(p, D, codes, { ...PARAMS, absWeight: PARAMS.absWeight * completeness(p, p.listMode || 'auto') }, pri);
 }
+// Jason's field interpretation notes (expert/notes.json): shown when their conditions hold; never change the scoring
+function fieldNotes(p, ranked, keyRes = []) {
+  const top = n => new Set([...ranked.slice(0, n).map(r => r.code), ...keyRes]);
+  return (D.fieldNotes || []).filter(nt => {
+    const w = nt.when || {}, t = top(w.top || 3);
+    if (w.any && !w.any.some(c => t.has(c))) return false;
+    if (w.all && !w.all.every(c => t.has(c))) return false;
+    if (w.subsection && !w.subsection.some(code => (p.subsection || '').includes(`(${code})`))) return false;
+    return true;
+  });
+}
 function classPriors(codes, ctx) { const o = {}; if (ctx) for (const c of codes) { const st = classStatus(c, ctx); if (st) o[c] = PRIOR[st]; } return o; }
 function paletteClasses() {                      // every class in the section (keyed-only classes too), narrowed by the system answers
   const sec = D.sections.find(x => x.code === S.plot.section); if (!sec) return [];
@@ -146,14 +157,14 @@ function paletteCard() {
   const p = S.plot;
   if (!p.section) return '<div class="card" id="palette"><h2>Possible NPCs here</h2><p class="muted">Set the section (GPS or by hand) to see the classes that apply.</p></div>';
   const ctx = locCtx(), cls = paletteClasses();
-  const groups = { D: [], Dn: [], P: [], Q: [], N: [], '': [] };
+  const groups = { D: [], Dn: [], R: [], P: [], Q: [], N: [], '': [] };
   for (const c of cls) groups[ctx ? (classStatus(c, ctx) || '') : ''].push(c);
   const item = c => `<div class="pal"><b>${esc(c)}</b> ${esc(comm(c)?.name || '')}</div>`;
   const block = (k, title, open = true) => groups[k].length ? `<details ${open ? 'open' : ''}><summary><b>${title}</b> (${groups[k].length})</summary>${groups[k].map(item).join('')}</details>` : '';
   const narrowed = p.land.upland || p.land.wooded ? ` · ${[p.land.upland, p.land.wooded].filter(Boolean).join(', ')} only` : '';
   return `<div class="card" id="palette"><h2>Possible NPCs here <span class="muted">${cls.length} classes in ${esc(p.section)}${narrowed}</span></h2>
     ${ctx ? `<p class="muted">From the DNR fact-sheet distribution maps for ${esc(ctx.ltaName)} (${esc(ctx.lta)}). Unlikely classes stay listed and can still win on the plants.</p>
-      ${block('D', 'Documented in this LTA')}${block('Dn', 'Documented in an adjacent LTA (within 1 km)')}${block('P', 'Possible in this LTA')}${block('Q', 'Occurrence unknown in this LTA (DNR “?”)')}${block('N', 'Not mapped in this LTA', false)}${block('', 'No distribution map', false)}`
+      ${block('D', 'Documented in this LTA')}${block('Dn', 'Documented in an adjacent LTA (within 1 km)')}${block('R', 'In the DNR mapped range (classes mapped without plot data)')}${block('P', 'Possible in this LTA')}${block('Q', 'Occurrence unknown in this LTA (DNR “?”)')}${block('N', 'Not mapped in this LTA', false)}${block('', 'No distribution map', false)}`
     : `<p class="muted">${!p.lat ? 'Add coordinates (GPS) to sort these by the DNR distribution maps.' : 'Loading distribution maps…'}</p>${block('', 'All classes in this section', false)}`}
     <p class="muted">Answer upland/wetland and wooded/open on the Landscape tab to narrow the list.</p></div>`;
 }
@@ -359,6 +370,7 @@ function resultsTab() {
   const defaults = r => r.run.path.filter(st => st.auto && st.evidence === 0 && st.leads.length > 1).length;
   const keyList = runs.length > 1 ? `<p class="muted" style="margin-top:6px"><b>All DNR keys run:</b> ${runs.map(r => `${esc(r.id)} ${esc(r.key.title || '')} → <b>${esc(r.run.result || (r.run.stop === 'choose' ? 'needs your choice' : 'stopped'))}</b>${defaults(r) ? ` <span class="badge warn">${defaults(r)} couplet${defaults(r) > 1 ? 's' : ''} by default</span>` : ''}`).join(' · ')}</p>` : '';
   const agree = keyed && top && keyed.run.result.startsWith(top.code);
+  const notesHtml = fieldNotes(p, ranked, runs.map(r => r.run.result?.slice(0, 5)).filter(Boolean)).map(nt => `<div class="step chosen" style="margin-top:10px"><b>Field note (${esc(nt.author)})</b><br>${esc(nt.text)}</div>`).join('');
   const fq = floristicQuality(p, D, sec.prov, { minFQI: S.settings.minFQI, flagBelow: S.settings.flagBelow });
   const name = c => esc(comm(c)?.name || '');
   // headline
@@ -366,11 +378,11 @@ function resultsTab() {
   if (keyed && top) head = `<div class="card"><h2>Summary</h2>
     <div class="verdict">${esc(keyed.run.result)} ${name(keyed.run.result.slice(0, 5))}</div>
     <p>${agree ? `<span class="badge good">Key and probabilities agree</span> The probability ranking puts ${esc(top.code)} first at ${Math.round(top.prob * 100)}%.`
-      : `<span class="badge warn">Key and probabilities disagree</span> The key gives ${esc(keyed.run.result)}; the probability ranking puts ${esc(top.code)} first (${Math.round(top.prob * 100)}%). Check the fact sheets for both.`}</p>${keyList}</div>`;
-  else if (top) head = `<div class="card"><h2>Summary</h2><div class="verdict">${esc(top.code)} ${name(top.code)}</div><p>Most probable class at ${Math.round(top.prob * 100)}%. ${runs.some(r => r.run.stop === 'choose') ? 'The key needs your answer below to finish.' : ''}</p>${keyList}</div>`;
+      : `<span class="badge warn">Key and probabilities disagree</span> The key gives ${esc(keyed.run.result)}; the probability ranking puts ${esc(top.code)} first (${Math.round(top.prob * 100)}%). Check the fact sheets for both.`}</p>${keyList}${notesHtml}</div>`;
+  else if (top) head = `<div class="card"><h2>Summary</h2><div class="verdict">${esc(top.code)} ${name(top.code)}</div><p>Most probable class at ${Math.round(top.prob * 100)}%. ${runs.some(r => r.run.stop === 'choose') ? 'The key needs your answer below to finish.' : ''}</p>${keyList}${notesHtml}</div>`;
   // probability ranking
   const rank = `<div class="card"><h2>Probability ranking <span class="muted">${cands.length} classes in ${esc(p.section)}${ranked.some(r => r.prov) ? ', some provisional' : ''}</span></h2>
-    ${ranked.slice(0, 8).map(r => `<div class="rank"><span class="code">${r.code}</span><span>${name(r.code)}${ctx && classStatus(r.code, ctx) ? ` <span class="badge ${{ D: 'good', Dn: 'good', P: '', Q: '', N: 'warn' }[classStatus(r.code, ctx)]}">${STATUS_TXT[classStatus(r.code, ctx)]}</span>` : ''}</span>${r.expert ? ' <span class="badge">field-based profile (J. Husveth); no DNR frequency table</span>' : r.prov ? ' <span class="badge warn">provisional: no DNR frequency table</span>' : ''}<span class="pct">${r.prob < 0.01 ? '<1' : Math.round(r.prob * 100)}%</span>
+    ${ranked.slice(0, 8).map(r => `<div class="rank"><span class="code">${r.code}</span><span>${name(r.code)}${ctx && classStatus(r.code, ctx) ? ` <span class="badge ${{ D: 'good', Dn: 'good', R: 'good', P: '', Q: '', N: 'warn' }[classStatus(r.code, ctx)]}">${STATUS_TXT[classStatus(r.code, ctx)]}</span>` : ''}</span>${r.expert ? ' <span class="badge">field-based profile (J. Husveth); no DNR frequency table</span>' : r.prov ? ' <span class="badge warn">provisional: no DNR frequency table</span>' : ''}<span class="pct">${r.prob < 0.01 ? '<1' : Math.round(r.prob * 100)}%</span>
       <div class="bar"><span style="width:${Math.max(1, r.prob * 100)}%"></span></div>
       <div class="why">${r.hits.length ? 'Found: ' + feats(r.hits, 6) : ''}${r.misses.length ? `<br>Expected, not recorded: ${feats(r.misses, 5)}` : ''}</div></div>`).join('')}
     ${(() => { const m = minerotrophic(p, D); const peat = ranked.slice(0, 8).some(r => /^(AP|FP|OP)/.test(r.code));
